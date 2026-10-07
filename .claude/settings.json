@@ -1,0 +1,12 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "denyRead": ["/etc/devbox/env", "/data/claude/.credentials.json"]
+    }
+  },
+  "permissions": {
+    "deny": ["Read(//etc/devbox/env)", "Read(//data/claude/.credentials.json)"]
+  },
+  "inputNeededNotifEnabled": true
+}

@@ -1,0 +1,41 @@
+"""Thin Modal wrapper. All logic lives in train.run()."""
+
+import sys
+from pathlib import Path
+
+import modal
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))  # lets `modal run <path>` import the package without install
+
+from features_depth_curriculum.config import GPUS, Config, load
+
+image = (
+    modal.Image.debian_slim(python_version="3.14")
+    .uv_sync(str(ROOT), extra_options="--no-install-project")  # same uv.lock as the box
+    .add_local_python_source("features_depth_curriculum")
+)
+app = modal.App("features-depth-curriculum", image=image)
+# WANDB_API_KEY lives in a Modal-side secret, never in GitHub. Create it once, in the
+# dedicated Modal workspace: modal secret create wandb WANDB_API_KEY=<key>
+secrets = [modal.Secret.from_name("wandb")]
+
+
+# Real gpu/timeout are set per config via with_options.
+@app.function(gpu=GPUS[0], timeout=300, secrets=secrets)
+def train(cfg: dict) -> dict:
+    from features_depth_curriculum.train import run
+
+    return run(Config(**cfg), "cuda")
+
+
+@app.local_entrypoint()
+def main(config: str, smoke: bool = False):
+    cfg = load(config)
+    if smoke:
+        cfg = cfg.smoke(keep_gpu_features=True).model_copy(update={"gpu": GPUS[0]})
+        print(train.with_options(gpu=cfg.gpu, timeout=300).remote(cfg.model_dump()))
+        return
+    fn = train.with_options(gpu=cfg.gpu, timeout=cfg.timeout_s, max_containers=cfg.max_containers)
+    # spawn, not remote: with `modal run --detach` the call keeps running after we exit
+    print("spawned", fn.spawn(cfg.model_dump()).object_id)

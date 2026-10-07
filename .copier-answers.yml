@@ -1,0 +1,10 @@
+_commit: b1d355f
+_src_path: gh:LongDangHoang/devbox
+default_gpu: A100
+devbox_repo: devbox
+github_owner: LongDangHoang
+package_name: features_depth_curriculum
+project_name: features-depth-curriculum
+python_version: '3.14'
+use_wandb: true
+
