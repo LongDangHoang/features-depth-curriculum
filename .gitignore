@@ -5,3 +5,20 @@ __pycache__/
 .ruff_cache/
 .pyright/
 *.egg-info/
+
+# Devbox / environment-injected files
+.bashrc
+.bash_profile
+.profile
+.zshrc
+.zprofile
+.gitconfig
+.ripgreprc
+.gitmodules
+.mcp.json
+.idea
+.vscode
+
+# Local Claude Code config (only .claude/settings.json is tracked)
+.claude/*
+!.claude/settings.json
