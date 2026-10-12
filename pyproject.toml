@@ -8,6 +8,8 @@ dependencies = [
   "pydantic>=2",
   "pyyaml",
   "modal",
+  "huggingface-hub>=2.2.0",
+  "pyarrow>=26.0.0",
 ]
 
 [dependency-groups]

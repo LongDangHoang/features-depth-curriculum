@@ -1,0 +1,59 @@
+# Data registry. Adding a source = adding an entry.
+# revision: pinned commit sha of the Hugging Face dataset repo.
+# BabyLM is the 2026 Strict 100M track; each domain file is its own source.
+sources:
+  - key: babylm_bnc_spoken
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["bnc_spoken.train.txt"]
+
+  - key: babylm_childes
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["childes.train.txt"]
+
+  - key: babylm_gutenberg
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["gutenberg.train.txt"]
+
+  - key: babylm_open_subtitles
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["open_subtitles.train.txt"]
+
+  - key: babylm_simple_wiki
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["simple_wiki.train.txt"]
+
+  - key: babylm_switchboard
+    role: base
+    hf_id: BabyLM-community/BabyLM-2026-Strict
+    revision: 9e57baaaa91ac3c638746be14d1d5fa6c789f4cf
+    format: babylm
+    files: ["switchboard.train.txt"]
+
+  - key: simplestories
+    role: synthetic
+    hf_id: SimpleStories/SimpleStories
+    revision: e63b8adc3b1a1bdc7cac5b500d150b71346b0628
+    format: simplestories
+    files: ["data/*.parquet"]
+
+  - key: tinystories_instruct
+    role: instruct
+    hf_id: roneneldan/TinyStoriesInstruct
+    revision: ee050ed1f8720795be342921335e821856a2b42e
+    format: tinystories_instruct
+    files: ["TinyStories-Instruct-*.txt"]
