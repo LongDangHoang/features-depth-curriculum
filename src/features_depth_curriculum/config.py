@@ -27,7 +27,7 @@ class Config(BaseModel, extra="forbid"):
     bf16: bool = False
     compile: bool = False
 
-    def smoke(self, keep_gpu_features: bool = False) -> "Config":
+    def smoke(self, keep_gpu_features: bool = False) -> Config:
         return self.model_copy(
             update={
                 "width": 16,
