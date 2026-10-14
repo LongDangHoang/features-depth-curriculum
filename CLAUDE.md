@@ -10,3 +10,5 @@
   GPU-only features (bf16 autocast, flash attention, `torch.compile`) go behind config flags. Local CPU smoke turns them off; the Modal GPU smoke leaves them on.
 - Keep `src/features_depth_curriculum/modal_app.py` a thin wrapper; all logic lives in `train.run()`.
 - GPU allowlist and `timeout_s`/`max_containers` bounds live in `config.py`.
+- Larger code changes: an Opus agent delegates the writing to Sonnet agents and acts as reviewer (more errors caught, better quality); small edits it makes itself.
+- Prefer semantically meaningful names over shorthand (no single-letter or cryptic variable names, even in comprehensions and tests), even if longer.
