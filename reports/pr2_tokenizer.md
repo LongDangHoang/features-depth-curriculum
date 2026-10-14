@@ -13,7 +13,7 @@ Ids 0..15 are fixed special tokens: `<|endoftext|>` at id 0, then `<|reserved_1|
 Round trip means `decode(encode(text)) == text` on every val document. A source is flagged `low`
 when its characters per token is below 0.8 times the median across sources.
 
-Tokenizer sha1: `e9bf74682bfb244c7924ccc0d4ee382a07b48496`
+Tokenizer sha1: `a7bea6c259270ed242fa881712b50d9cdd4ecbd6`
 
 Vocabulary size: 8,192
 
@@ -21,15 +21,15 @@ Special tokens: `<|endoftext|>`=0, `<|reserved_1|>`=1, `<|reserved_2|>`=2, `<|re
 
 | source | train chars sampled | val docs | val chars | val tokens | chars/token | round-trip failures | flag |
 |---|---:|---:|---:|---:|---:|---:|---|
-| babylm_bnc_spoken | 19,972,420 | 80 | 313,411 | 87,804 | 3.569 | 0 |  |
-| babylm_childes | 20,080,113 | 418 | 1,476,031 | 594,997 | 2.481 | 0 | low |
-| babylm_gutenberg | 20,145,023 | 389 | 1,439,572 | 390,969 | 3.682 | 0 |  |
-| babylm_open_subtitles | 20,011,686 | 336 | 1,186,183 | 377,778 | 3.140 | 0 |  |
-| babylm_simple_wiki | 20,056,986 | 1,164 | 887,987 | 259,304 | 3.425 | 0 |  |
-| babylm_switchboard | 1,198,619 | 5 | 19,700 | 6,882 | 2.863 | 0 |  |
-| simplestories | 20,078,224 | 21,280 | 26,320,290 | 6,252,071 | 4.210 | 0 |  |
-| tinystories_instruct | 20,051,288 | 24,928 | 26,355,808 | 6,494,193 | 4.058 | 0 |  |
+| babylm_bnc_spoken | 19,972,326 | 80 | 313,411 | 87,860 | 3.567 | 0 |  |
+| babylm_childes | 20,243,569 | 383 | 1,316,462 | 450,232 | 2.924 | 0 |  |
+| babylm_gutenberg | 20,145,023 | 389 | 1,439,572 | 390,826 | 3.683 | 0 |  |
+| babylm_open_subtitles | 20,011,686 | 336 | 1,186,183 | 377,771 | 3.140 | 0 |  |
+| babylm_simple_wiki | 20,060,850 | 1,159 | 868,359 | 250,999 | 3.460 | 0 |  |
+| babylm_switchboard | 1,210,345 | 2 | 7,974 | 2,681 | 2.974 | 0 |  |
+| simplestories | 20,078,224 | 21,280 | 26,320,290 | 6,249,923 | 4.211 | 0 |  |
+| tinystories_instruct | 20,051,288 | 24,928 | 26,355,808 | 6,489,576 | 4.061 | 0 |  |
 
 Random learned tokens (seed 0, by id, so earlier merges first):
 
-`'ue'`, `'ress'`, `' last'`, `' Le'`, `'She'`, `'dy'`, `' bad'`, `' ent'`, `'ative'`, `' At'`, `'ech'`, `'str'`, `'rest'`, `' pounds'`, `'pril'`, `' Grand'`, `' 15'`, `' memories'`, `' complete'`, `' beginning'`, `' descri'`, `' 2021'`, `' shone'`, `' choice'`, `'yle'`, `'ression'`, `' stream'`, `' circle'`, `' forth'`, `'Ab'`, `'ees'`, `'cks'`, `' surrounded'`, `' heat'`, `' eleven'`, `' bang'`, `' poet'`, `'atin'`, `' Child'`, `'rial'`, `' squee'`, `' WH'`, `' evil'`, `' mel'`, `'itz'`, `' ta'`, `' bravery'`, `' function'`, `' Get'`, `' elderly'`, `' whispering'`, `' thirteen'`, `' religion'`, `' Teddy'`, `' recognized'`, `'anas'`, `' doin'`, `' drugs'`, `'EW'`, `' hut'`
+`'my'`, `' really'`, `'00'`, `' won'`, `'tain'`, `' bad'`, `'ached'`, `' actually'`, `'gy'`, `'ued'`, `' within'`, `' Brit'`, `' check'`, `'oose'`, `' whatever'`, `' discovered'`, `' glass'`, `' cream'`, `' fairy'`, `' lie'`, `' eager'`, `'roy'`, `' represent'`, `' touched'`, `' River'`, `' sandw'`, `' ("'`, `' 2022'`, `' library'`, `'chi'`, `'bout'`, `' pic'`, `'vocal'`, `'16'`, `'ech'`, `' hotel'`, `' )'`, `' Lab'`, `' jewels'`, `'gers'`, `'ima'`, `'rick'`, `' Tuesday'`, `' produce'`, `'Eh'`, `' troops'`, `' Catholic'`, `' benefit'`, `' Ted'`, `' gro'`, `' vir'`, `'chair'`, `' prepare'`, `' economy'`, `'oughs'`, `' neighborhood'`, `'SIB'`, `' raining'`, `' succeeded'`, `' chemical'`
