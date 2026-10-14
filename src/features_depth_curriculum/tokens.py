@@ -41,23 +41,25 @@ def tokenize_file(
     end_of_text_id = tokenizer.token_to_id("<|endoftext|>")
     bin_dir = data.DATA_ROOT / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
-    doc_starts: list[int] = []
+
+    doc_starts_idx: list[int] = []
     total_tokens = 0
     with (bin_dir / f"{name}.bin").open("wb") as bin_file:
         for batch in itertools.batched(data.read_docs(source.key, split), ENCODE_BATCH_DOCS):
             texts = [format_document(source.role, template, doc) for doc in batch]
             batch_ids = []
-            for encoding in tokenizer.encode_batch(texts):
-                doc_starts.append(total_tokens + len(batch_ids))
-                batch_ids += encoding.ids + [end_of_text_id]
-            np.array(batch_ids, dtype=np.uint16).tofile(bin_file)
+            for encoded_doc_text in tokenizer.encode_batch(texts):
+                doc_starts_idx.append(total_tokens + len(batch_ids))
+                batch_ids += encoded_doc_text.ids + [end_of_text_id]
+            bin_file.write(np.array(batch_ids, dtype=np.uint16).tobytes())  # appends to the file
             total_tokens += len(batch_ids)
-    np.save(bin_dir / f"{name}.idx.npy", np.array(doc_starts, dtype=np.int64))
+    np.save(bin_dir / f"{name}.idx.npy", np.array(doc_starts_idx, dtype=np.int64))
+
     with (bin_dir / f"{name}.bin").open("rb") as bin_file:
         bin_sha1 = hashlib.file_digest(bin_file, "sha1").hexdigest()
     return {
         "role": source.role,
-        "docs": len(doc_starts),
+        "docs": len(doc_starts_idx),
         "tokens": total_tokens,
         "sha1": bin_sha1,
     }
@@ -72,10 +74,11 @@ def render(tokenizer: Tokenizer, manifest: dict) -> str:
     for name, entry in manifest["files"].items():
         tokens = np.memmap(data.DATA_ROOT / "bin" / f"{name}.bin", dtype=np.uint16)
         end_of_text = int(np.count_nonzero(tokens == 0))
-        matches = "yes" if end_of_text == entry["docs"] else "no"
+        count_matches = "yes" if end_of_text == entry["docs"] else "no"
         tokens_per_doc = entry["tokens"] / entry["docs"]
         row = f"| {name} | {entry['docs']:,} | {entry['tokens']:,} | {tokens_per_doc:.1f} "
-        lines += [row + f"| {end_of_text:,} | {matches} |"]
+        lines += [row + f"| {end_of_text:,} | {count_matches} |"]
+
         start = random.Random(name).randrange(entry["tokens"])
         window_ids = tokens[start : start + WINDOW_TOKENS].tolist()
         window_text = tokenizer.decode(window_ids, skip_special_tokens=False)
