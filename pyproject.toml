@@ -10,6 +10,7 @@ dependencies = [
   "modal",
   "huggingface-hub>=2.2.0",
   "pyarrow>=26.0.0",
+  "tokenizers>=0.23.3",
 ]
 
 [dependency-groups]
