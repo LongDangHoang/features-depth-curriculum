@@ -21,6 +21,7 @@ CHUNK_CHARS = 4000
 MIN_CHARS = 50
 TSI_FIELDS = re.compile(r"^(Words|Features|Summary|Random sentence|Story): ?", re.MULTILINE)
 BABYLM_HEADER = re.compile(r"^= = = .* = = =\n?", re.MULTILINE)
+SPEAKER_TAG = re.compile(r"^\*?([A-Z][A-Z0-9]*):\t", re.MULTILINE)
 INTRO = """# PR 1: data report
 
 Per document: Unicode NFKC, CRLF to LF, C0 and C1 control characters removed, trailing spaces
@@ -33,7 +34,9 @@ Files are split into documents on their `= = = title = = =` header lines (title 
 into 4000-char line-boundary chunks; the split is per chunk, so val is chunk-disjoint, not
 document-disjoint. Headers mark CHILDES transcripts, Gutenberg books and Simple Wikipedia
 articles; BNC, OpenSubtitles and Switchboard have none, so they are only chunked. Speaker tags
-(`*MOT:`, `A:`) and CHILDES `[action]` lines are kept as upstream. Upstream files are not
+followed by a tab (`*MOT:\t`, `A:\t`) are rewritten to `MOT: ` and `A: `, so the word after the
+tag is spaced like any other word; CHILDES `%add:` tiers and `[action]` lines are kept as
+upstream. Upstream files are not
 perfectly separated by domain, and this is kept as is: open_subtitles contains about 3,800 short
 Simple Wikipedia articles, childes contains 8 Gutenberg books, simple_wiki contains one 5 MB
 Switchboard-style dialogue, and bnc_spoken ends with one CHILDES transcript.
@@ -96,10 +99,16 @@ def chunk_lines(text: str, max_chars: int) -> Iterator[str]:
         yield "".join(chunk_parts)
 
 
+def rewrite_speaker_tags(text: str) -> str:
+    """Turn `*MOT:<tab>` and `A:<tab>` line prefixes into `MOT: ` and `A: `."""
+    return SPEAKER_TAG.sub(r"\1: ", text)
+
+
 def parse_babylm(source: Source) -> Iterator[tuple[str, dict]]:
     """Yield chunks of each document of each BabyLM file, documents split on header lines."""
     for path in raw_files(source):
-        for document in BABYLM_HEADER.split(path.read_text(encoding="utf-8")):
+        text = rewrite_speaker_tags(path.read_text(encoding="utf-8"))
+        for document in BABYLM_HEADER.split(text):
             for chunk in chunk_lines(document, CHUNK_CHARS):
                 yield chunk, {}
 

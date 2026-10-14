@@ -10,7 +10,9 @@ Files are split into documents on their `= = = title = = =` header lines (title 
 into 4000-char line-boundary chunks; the split is per chunk, so val is chunk-disjoint, not
 document-disjoint. Headers mark CHILDES transcripts, Gutenberg books and Simple Wikipedia
 articles; BNC, OpenSubtitles and Switchboard have none, so they are only chunked. Speaker tags
-(`*MOT:`, `A:`) and CHILDES `[action]` lines are kept as upstream. Upstream files are not
+followed by a tab (`*MOT:	`, `A:	`) are rewritten to `MOT: ` and `A: `, so the word after the
+tag is spaced like any other word; CHILDES `%add:` tiers and `[action]` lines are kept as
+upstream. Upstream files are not
 perfectly separated by domain, and this is kept as is: open_subtitles contains about 3,800 short
 Simple Wikipedia articles, childes contains 8 Gutenberg books, simple_wiki contains one 5 MB
 Switchboard-style dialogue, and bnc_spoken ends with one CHILDES transcript.
@@ -22,7 +24,7 @@ then re-split by the hash rule. The sha1 of each output file is listed so a reru
 
 | split | docs | chars | sha1 |
 |---|---:|---:|---|
-| train | 9,995 | 39,030,896 | `aa1ca4465f13739a0a7995c0ce3d5cc2fbf6526f` |
+| train | 9,995 | 39,030,271 | `417fe70740fce34babafa2fe77849cdca0f2d21b` |
 | val | 80 | 313,411 | `ea5596d30e00d5d50c7d0a85bcbb502dc20a5f82` |
 
 Parsed 10,075 documents. Dropped: 
@@ -167,14 +169,14 @@ So she needs the baby to do that and at that point once her milk production sche
 
 | split | docs | chars | sha1 |
 |---|---:|---:|---|
-| train | 41,648 | 144,887,306 | `8f5bd66189f67dfcecc5eecdf72f297b28fcf81e` |
-| val | 418 | 1,476,031 | `f385252097f23adc777fe25d077a4a1d87493c38` |
+| train | 40,449 | 140,015,620 | `1dd74b6190ac37444fac52c56ec5dc07fb806044` |
+| val | 383 | 1,316,462 | `320791bf69f94d40e46de57fe2b6e9d6add09e61` |
 
-Parsed 43,460 documents. Dropped: 
-- too_short: 75
-- duplicate: 1,319
+Parsed 42,195 documents. Dropped: 
+- too_short: 90
+- duplicate: 1,273
 
-Non-ASCII: 53,059 chars (0.0363%). Top:
+Non-ASCII: 53,059 chars (0.0375%). Top:
 
 - `⌋` U+230B RIGHT FLOOR: 6,802
 - `⌈` U+2308 LEFT CEILING: 6,796
@@ -190,197 +192,183 @@ Non-ASCII: 53,059 chars (0.0363%). Top:
 Random train documents (seed 0):
 
 ~~~
-[Home Visit 2; Mot and Chi sitting next to each other on floor of Chi's bedroom]
-*INV1:	here um should I just dump 'em here?
-*MOT:	yeah you can just uh...
-[toys are dumped out onto the floor]
-*MOT:	oop!
-*MOT:	oop what's this [firehat]?
-*MOT:	zzz.
-[gasps]
-*MOT:	see what do you like here?
-*CHI:	zzz.
-[grunts]
-*MOT:	aren't you gonna look at 'em?
-*CHI:	[points to What's Next Baby Bear]
-*MOT:	oh you wan [...]
+CHI: um she's lookin' at the stars and the moon.
+CHI: [noise]
+MOT: okay.
+CHI: no!
+CHI: I want...
+CHI: no.
+CHI: I'll xxx.
+MOT: be careful!
+CHI: be careful.
+MOT: now.
+MOT: what's that?
+CHI: a clock.
+MOT: okay.
+MOT: and what's that?
+CHI: bear.
+MOT: and what it this over here?
+CHI: bear.
+MOT: and what's the bear doin'?
+CHI: he's trying to get some clothes.
+CHI: and he's trying to make a mess!
+MOT: no  [...]
 ~~~
 
 ~~~
-*MOT:	there's a nice chair.
-*CHI:	[CHI turns around again and reaches out for jack+in+the+box]
-[CHI looks at jack+in+the+box]
-*MOT:	what's that [the jack+in+the+box]?
-%int:	low pitched
-*CHI:	[CHI starts playing with jack+in+the+box]
-*MOT:	oh boy.
-[1 lengthened]
-*CHI:	[CHI pulls jack+in+the+box closer to her holding onto crank]
-*MOT:	oh boy.
-*CHI:	[CHI lets go of crank. CHI plays with crank with he [...]
+MOT: what do you think?
+[June tries to put it through a hole.]
+MOT: can you put it in?
+MOT: oh that's good.
+[then June drops it through the lid.]
+MOT: didn't wanna huh?
+[mother hands June another shape.]
+MOT: can you find a hole for that one?
+[June cries]
+[then she drops the shape through the lid. June can't get it through a hole.]
+MOT: won't go huh!
+[gives her another shape]
+MOT: what about this  [...]
 ~~~
 
 ~~~
-*FAT:	all the way in.
-*CHI:	uh huh.
-*FAT:	I think you could probably put it on your foot too.
-*CHI:	uh huh.
-*FAT:	let's see.
-*CHI:	don't.
-[D laughs]
-*FAT:	pretty good, huh?
-*CHI:	yeah.
-*CHI:	look it.
-*FAT:	yeah.
-*CHI:	see.
-*FAT:	there.
-[D laughs]
-*FAT:	I can't even get I around my foot.
-*FAT:	I got a big foot.
-*CHI:	um me too.
-*FAT:	yeah.
-*CHI:	look watch.
-*CHI:	it doesn't fit in.
-*FAT:	ah too big [...]
+[Lance talks to the mother at the same time his father, says something]
+MOT: yes, okay.
+FAT: first he eats this much, then he eats the chicken.
+MOT: I tell ya.
+BRO: no, I wanna eat the rest of the pizza.
+MOT: oh, you don't want the chicken?
+BRO: no, the rest of the pizza.
+MOT: alright honey, you don't the chicken honey?
+MOT: you don't want the chicken?
+MOT: you wanna eat the you don't want any chi [...]
 ~~~
 
 ~~~
-[E lies on sofa with her bottle. M is in kitchen. E wants more lemonade in her bottle]
-*CHI:	Mummie.
-*MOT:	yeh?
-*CHI:	ayade.
-*CHI:	Mummie.
-*MOT:	what?
-*CHI:	ayade.
-*MOT:	can't do it a minute.
-*MOT:	I'm doing something.
-*CHI:	mum Mum.
-*CHI:	[coughs]
-*CHI:	mum Mum.
-*MOT:	what?
-*CHI:	bottle.
-*MOT:	bottle?
-*CHI:	look.
-[1. sings]
-*CHI:	those our ones.
-[M chats to R in background.]
-*MAT:	xxx that.
-*MAT: [...]
+[Playing with toys]
+MOT: play with some of these toys.
+CHI: come and find we.
+MOT: yeah.
+MOT: we've come to try out the new toys for Jeannine.
+CHI: not xxx.
+MOT: have you ever did you do these ones?
+MOT: or are they too easy for you?
+MOT: is this too easy 'cause you can see it can't you?
+CHI: yeah.
+MOT: you've got a tractor.
+MOT: you can put it in there but is that a bit easy?
+MOT: do you think yo [...]
 ~~~
 
 ~~~
-*CHI:	xxx and Grandad won't be there.
-*MOT:	no.
-*MOT:	Grandma and Grandad will be there as well.
-*MOT:	shall we go and visit them at their house?
-*MOT:	shall we go to Grandma and Grandad's house and Auntie Lwww's house?
-*MOT:	would you like to go and see them?
-*CHI:	what say?
-*MOT:	would you like to go and see them?
-*CHI:	um don't know.
-*MOT:	you don't know?
-*CHI:	no.
-*MOT:	do you not wanna go to  [...]
+CHI: where's little Bob?
+CHI: it's little Bob.
+MOT: mm.
+CHI: it's little Bob.
+CHI: Mummy?
+MOT: what, darling?
+CHI: um where's Mummy?
+CHI: where's Daddy?
+MOT: where's Daddy?
+CHI: yes.
+MOT: Daddy's downstairs.
+CHI: on his scooter.
+MOT: on his scooter?
+MOT: what did you say?
+CHI: Daddy's in his scooter.
+MOT: his what?
+CHI: his scooter.
+MOT: his computer.
+CHI: computer.
+MOT: that's it.
+CHI: computer.
+ [...]
 ~~~
 
 ~~~
-*CHI:	I wanna watch Dora.
-*MOT:	do you?
-*CHI:	yeah.
-*MOT:	Dora's not on now, darling.
-*CHI:	why?
-*MOT:	'cause it's finished.
-*CHI:	but I wanna watch it.
-*CHI:	but I wanna watch it.
-*MOT:	Fraser.
-*MOT:	no.
-*MOT:	no, darling.
-*CHI:	I shut the door.
-*MOT:	did you shut that door?
-*CHI:	yeah.
-*MOT:	[gasps].
-*MOT:	aren't you clever?
-*MOT:	are you a clever boy?
-*CHI:	oh, Mummy!
-*MOT:	Fraser.
-*MOT:	aah.
-* [...]
+MOT: are we?
+CHI: no.
+CHI: you hafta look at something you can see in the back garden.
+MOT: right.
+MOT: okay.
+CHI: Mummy, you hafta look too.
+MOT: I'm sorry.
+MOT: okay.
+MOT: just one sec.
+MOT: you tell me what you can see then.
+CHI: Mummy.
+MOT: yeah.
+CHI: Mum, you hafta come in too.
+CHI: no.
+CHI: you hafta come...
+CHI: I can see a trampoline.
+MOT: I can see a sunflower.
+CHI: Mummy.
+MOT: what?
+CHI: [...]
 ~~~
 
 ~~~
-*CHI:	um.
-*CHI:	animals.
-*MOT:	animals.
-*CHI:	wow.
-*CHI:	new animals.
-*MOT:	new animals?
-*CHI:	yep.
-*MOT:	what animals have you got?
-*CHI:	uh.
-*CHI:	giraffe.
-*CHI:	uh.
-*CHI:	don't know.
-*MOT:	can you see?
-*CHI:	know what it is?
-*MOT:	let me have a look.
-*MOT:	have a look through the...
-*MOT:	that's a parrot.
-*CHI:	parrot.
-*MOT:	do you know what that is?
-*CHI:	no.
-*MOT:	shall we have a look?
-*MOT:	 [...]
+MOT: Hare will win by miles said Hedgehog.
+MOT: Tortoise did not show that he was hurt by these unkind remarks instead he just kept plodding on.
+MOT: all the time saying to himself slow and steady wins the race.
+MOT: slow and steady wins the race.
+MOT: Hare charged relentlessly through the woods.
+MOT: he looked back but there was no sign of Tortoise so he lolloped on for a few more minutes and the [...]
 ~~~
 
 ~~~
-[Participants in a quiet room at the child's home, using Frog where are you? book for stimulus]
-[child and investigator talk briefly before narrative begins.]
-*CHI:	um the little boy and the dog sat in his bedroom looking at a frog which is in a pot.
-*CHI:	um they go to sleep.
-*CHI:	and then the frog comes out of the pot.
-*CHI:	the next morning they wake up and they found that the frog's disappear [...]
+CHI: nih.
+MOT: are you on the phone?
+MOT: who are you on the phone to?
+MOT: hello.
+MOT: who is it?
+CHI: eeyeh.
+MOT: oh god.
+MOT: who are you on the phone to?
+MOT: wait a minute.
+CHI: uh.
+MOT: right.
+MOT: I wish you would leave my phone and stop phoning people.
+MOT: right, who is this?
+MOT: there's your motorbike.
+MOT: are you gonna get it?
+MOT: are you ready, steady, fire?
+MOT: whee!
+MOT: go and g [...]
 ~~~
 
 ~~~
-*MOT:	where do you want to put yours.
-*CHI:	yes.
-*MOT:	okay.
-*MOT:	you're gonna fill the last space.
-*MOT:	oh let's move it up just a little bit.
-*MOT:	there we go.
-*MOT:	good job.
-*MOT:	right.
-*MOT:	need to tuck more soil in.
-*CHI:	why are we hiding them.
-*MOT:	because they like hiding.
-*CHI:	bit more.
-*MOT:	spread it out.
-*CHI:	leg gone.
-*MOT:	good job.
-*MOT:	Ellie then push down.
-*CHI:	good.
-*M [...]
+MOT: Egbert didn't like the asteroids very much so he left the others on the rocket.
+MOT: bye Egbert.
+MOT: are you saying byebye to Egbert this time Jen?
+MOT: nope.
+CHI: guh.
+MOT: Zuzu bravely took over the controls.
+CHI: eeooh.
+MOT: oh we're going back in the book.
+MOT: no baby we've got to go forward.
+CHI: gik.
+MOT: wrong way, there we go.
+MOT: Zuzu bravely took over the t controls and flew thei [...]
 ~~~
 
 ~~~
-*CHI:	is a Bow xxx.
-*MOT:	pardon.
-*CHI:	is a Bow xxx.
-*MOT:	Purdie?
-*MOT:	I don't know.
-*MOT:	she's here.
-*MOT:	hello, Purdie.
-*CHI:	hello, Bow.
-*MOT:	do you wanna go out?
-*MOT:	I'll open the door.
-*MOT:	perhaps she wants to go out.
-*CHI:	Bow.
-*MOT:	no she 'as gone back upstairs.
-*MOT:	but what 'as happened to your shoes and socks?
-*CHI:	no.
-*CHI:	shoe sock.
-*MOT:	have you taken them off?
-*CHI:	eh [...]
+CHI: yeah.
+MOT: what's the magic word?
+CHI: please can I have a chocolate cake?
+MOT: please can I have a chocolate cake?
+MOT: no.
+MOT: we always get back to chocolate don't we?
+MOT: always back to chocolate with you.
+CHI: uh huh.
+MOT: no.
+CHI: [makes noises].
+MOT: the magic word was abra '...
+CHI: abra cadabra.
+MOT: abra cadabra.
+MOT: but you're saying that with a policeman in your mouth.
+MOT: abr [...]
 ~~~
 
 ## babylm_gutenberg (base, `BabyLM-community/BabyLM-2026-Strict@9e57baaaa91ac3c638746be14d1d5fa6c789f4cf`)
@@ -607,8 +595,8 @@ Right away, Mr. Ledyar [...]
 
 | split | docs | chars | sha1 |
 |---|---:|---:|---|
-| train | 111,704 | 83,411,392 | `f079f081130f414117fc38f0d611e587f4f3b742` |
-| val | 1,164 | 887,987 | `7f6836c4f61642b74a615338396520185b999184` |
+| train | 111,709 | 83,431,020 | `1b26f346c3a0138692eedc2f16bd7e1aa71d9bf0` |
+| val | 1,159 | 868,359 | `0fbe715efc8c5f8f59177bf5f2312841ea038159` |
 
 Parsed 115,738 documents. Dropped: 
 - too_short: 2,818
@@ -671,26 +659,21 @@ New Hampshire's sports teams, known as Wildcats, mostly play in the America East
 ~~~
 
 ~~~
-B:	He'll either bark for food, or he'll bark to go out
-B:	and he'll tell you which one he wants.
-B:	He's been through obedience school.
-A:	Well he just can,
-A:	well he has been trained
-A:	and you've you've kept it up, haven't you.
-B:	Oh, definitely.
-A:	Yeah,
-A:	it is wonderful,
-A:	I, I have some neighbors across the field,
-A:	and, um, they
-A:	when we first moved here, uh, when the dogs and I didn' [...]
+B: Oh, it's, it's gorgeous.
+B: Uh, we used to go quite a bit, uh, before I moved out here.
+B: We were closer and, uh, used to go almost every summer, uh, and, rent a condo there on the beach.
+B: Uh, there's quite a few, uh, there's a lot of development of, of condominiums there on the beach front.
+A: Right.
+B: And, uh, so they have, uh, they are very, very large condos.
+B: And, they have quite a f [...]
 ~~~
 
 ## babylm_switchboard (base, `BabyLM-community/BabyLM-2026-Strict@9e57baaaa91ac3c638746be14d1d5fa6c789f4cf`)
 
 | split | docs | chars | sha1 |
 |---|---:|---:|---|
-| train | 303 | 1,198,619 | `f752164325571468a59321cf969a20cdd528be98` |
-| val | 5 | 19,700 | `d5879501ca2d95839a96711245bdae85da188236` |
+| train | 306 | 1,210,345 | `f85dc60b3564c59d9d15e8fae8e1e64c397c5788` |
+| val | 2 | 7,974 | `42557ee8b5e80bd15061ec5ef97c87ce492d9cb4` |
 
 Parsed 308 documents. Dropped: 
 - too_short: 0
@@ -702,134 +685,134 @@ Non-ASCII: 0 chars (0.0000%). Top:
 Random train documents (seed 0):
 
 ~~~
-A:	or I don't care, as long as it's something that's going to do some good or that looks like it could be beneficial,
-B:	Uh-huh,
-B:	yeah.
-A:	I mean, that's the point I'm at now.
-A:	I mean that's the point we all should be at, is like finding some solution,
-B:	Um, yeah.
-A:	I mean, you know, nothing totally radical,
-A:	but if it's something that, you know, might help, you know,
-A:	because there's no [...]
+A: or I don't care, as long as it's something that's going to do some good or that looks like it could be beneficial,
+B: Uh-huh,
+B: yeah.
+A: I mean, that's the point I'm at now.
+A: I mean that's the point we all should be at, is like finding some solution,
+B: Um, yeah.
+A: I mean, you know, nothing totally radical,
+A: but if it's something that, you know, might help, you know,
+A: because there's no [...]
 ~~~
 
 ~~~
-B:	and, um, it's just, you know, hasn't been very practical to get into a lot of those things.
-B:	If they would make it something where they, you know, would pick it up at the curb or at least make it, you know, down the street and at the corner, type of thing, uh,
-A:	Right,
-A:	more areas where they would pick it up.
-B:	Yeah,
-A:	Yeah.
-B:	that wouldn't be so bad.
-A:	Yeah.
-B:	Um, our grocery store,  [...]
+A: I don't know,
+A: gobs.
+A: This is going on my fourth week to do it.
+B: Oh, my.
+B: And some of the prizes are pretty nice.
+A: Well, like what,
+A: tell me.
+B: Oh, I wish I had that booklet here.
+B: Oh, I think I do,
+B: it's right here.
+B: I'll look at the end because those would be the best ones, okay?
+A: Yeah.
+B: Um, well, they have some watches that look really nice.
+B: There's one that's got s [...]
 ~~~
 
 ~~~
-B:	and, and there's so much broth and juice in there, that it has to, uh, soak up into the rice, all day long, in order for it to, uh, uh, to come out fluffy and, and nice.
-A:	Oh, great.
-B:	And that was, you know,
-B:	when you were talking about the, the Polish dishes, uh, some goulashes and things like that.
-B:	That's, uh, that's what I thought about, was that Armenian rice dish.
-A:	Oh, yes,
-A:	we [...]
+B: And, and, as far as our, you know, our conversation goes, I would really be interested to know how much of T I's problems now are related to, the banking structure.
+A: Banking?
+A: I think that, not, not only T I, but a lot of it, when they talk about, uh,
+A: there was one point I was going to make.
+A: I think the last I heard,
+A: and I, I have to admit I'm not as informed as them,
+A: but there' [...]
 ~~~
 
 ~~~
-B:	she's probably,
-B:	let's see my mother's in her early sixties,
-B:	so.
-A:	She's, she's about forty.
-B:	Okay,
-B:	I'm thirty-eight,
-B:	I just turned thirty-eight.
-B:	Um, yes
-B:	I'm laughing,
-B:	oh my God.
-B:	It does start to creep up.
-A:	Uh-huh.
-B:	No,
-B:	um, but it's okay,
-B:	don't ever let age,
-B:	I mean, I don't
-A:	Okay.
-B:	nobody talks about it for women except other women and other men.
-A:	I, [...]
+B: and when you have a vehicle that's being used by, you know, other members of your family, you know, you don't want that kind of a situation to come up.
+A: No.
+B: And it's very, very difficult to find a mechanic these days that you can trust.
+B: I only have one guy that I know that I trust to work on my car.
+A: Uh-huh.
+B: And, uh, he's about sixty miles from here.
+B: And so, it,
+B: and if I have [...]
 ~~~
 
 ~~~
-B:	So if you've got thirty in there it normally comes out to about thirty-four dollars so when you pay five it's a pretty good savings.
-B:	Then there's other times that, you know, maybe the prescription wouldn't cost more than like seven or eight dollars
-B:	and you pay five anyhow.
-B:	So it isn't a,
-A:	Hi
-A:	you want to start first
-B:	Of course.
-B:	We are talking about the elderly and, uh, whether [...]
+B: and then, if they ever have to change anything in that, in that, in the document, they have to go back and redo it all manually, whereas if they had learned the package properly to start with and had set it up correctly, the package would do that for them whenever they wanted to make a change,
+A: Uh-huh.
+A: Can't you, can't you put, Can't you put it on a disk and then just edit it, if you need  [...]
 ~~~
 
 ~~~
-A:	and then, um, actually married in Pittsburgh,
-A:	and that's, that's not what they want to hear on this call, uh
-B:	Uh-huh.
-A:	at any rate we came back here with,
-A:	my husband was transferred around, uh, up to Minnesota and now back to Texas with T I
-B:	Uh-huh.
-A:	and we're leasing a, uh, two story town home in a section of Dallas they call North Dallas.
-B:	Oh, uh-huh.
-A:	And it's, uh, near a l [...]
+A: Yeah.
+A: And I think, you know, we have such a need now, you know,
+A: I taught, you know,
+A: I, I think I was paid, uh, about nine thousand dollars to teach for the year
+B: Uh-huh.
+A: and I worked in a very rural school district
+A: and I, I, one of the things I taught was a computer class
+B: Uh-huh.
+A: and these kids, um, you know, every girl I taught, except for one, was pregnant.
+B: Oh, no.
+A [...]
 ~~~
 
 ~~~
-A:	Of, of course, I find now that I spend more time with my grandchildren in detail.
-B:	uh-huh.
-A:	I know more about them and watch their growth and how they improve and, and learn much more so than my own kids.
-A:	When, when your own children are growing up, you just take them for granted
-A:	and you go ahead and do your thing
-A:	and,
-A:	Okay.
-A:	Do you have any children?
-B:	Uh, yes,
-B:	I have a d [...]
+B: Do you think there should be drug testing for political officials?
+A: Yes,
+A: I do.
+B: Yeah,
+B: I do, too.
+A: Because, because a lot of them are, you know, they're hypocritical.
+A: They, they talk against drugs
+B: Yeah.
+A: and then they get caught, you know.
+B: Uh-huh.
+A: In stings in Washington. *one utt with a.61
+B: Yeah.
+A: Whether it's drugs or any other kind of, uh,
+A: like the, the money  [...]
 ~~~
 
 ~~~
-B:	Well and I think, uh, you touched on it, you know,
-B:	you've got to start them at the home. You know
-A:	Yeah.
-B:	that's where they, that's where they get the, the deep rooted values
-B:	and, and, and, uh, and that's about right.
-A:	That's all you can do.
-B:	Then you just have to hope and pray that, that everything, uh, works out, works out okay,
-B:	so.
-A:	That's right.
-A:	Well I got to be going, [...]
+B: And when, uh, when come time to get out of school, I thought, Boy, I'd like to teach.
+B: But you know, for, for what.
+A: Yeah.
+B: You know, I don't want to live in a little one bedroom apartment the rest of my life.
+A: Exactly.
+B: I mean, that, that's a sad thing to think,
+B: and that's kind of selfish on my part,
+B: and I admit that,
+A: Well, in a way it is,
+A: but you have to look out for you [...]
 ~~~
 
 ~~~
-A:	little TEXAS BICYCLIST, is like a little newspaper that comes out every month.
-B:	Um.
-A:	It's free
-A:	just go to the bike shock, bike shop and pick it up,
-A:	and it's got all the rides coming up,
-A:	so I guess I'm going to be busy about every Saturday this summer, going to a different ride.
-B:	Oh, that's terrific.
-A:	Yeah,
-A:	see a little bit of Texas I've never seen before.
-B:	Uh-huh.
-A:	So, u [...]
+A: Uh they're not, uh, they're, they're affectionate
+B: Well, you don't own cats.
+A: but they,
+A: yeah
+A: I don't know,
+A: I can't seem to communicate with a cat like I can with my dog.
+B: Yeah.
+B: You, they, they own you or, or, you know, grant you with you their presence, you know.
+A: Yeah,
+A: right
+A: Yeah.
+A: Right.
+A: That,
+A: yes,
+A: we're supposed to appreciate them.
+A: Well, my, my dog whe [...]
 ~~~
 
 ~~~
-A:	But, you know, we, we back up what we what we say with actions.
-B:	Uh, yeah.
-B:	We have so far,
-B:	but we, really haven't,
-A:	I don't know, how long it's going to last.
-B:	Of course, we really haven't taken on the drug lords, yet.
-A:	Yeah.
-B:	I'd be interested to see if we do that.
-A:	Well, I don't think it's possible because, even though, you know, we're against them, I don't think we can go i [...]
+A: but I, I have a lot of friends with children
+A: and I know they spend a lot of time with them.
+A: Which is good, you know.
+B: That's good to hear.
+B: Yeah,
+B: an, I haven't, uh,
+B: well I've been around a lot of people lately at at my job that don't have a lot of values
+B: So, it's, it's always nice to see people that like each other,
+B: and like families that get along with each other and like [...]
 ~~~
 
 ## simplestories (synthetic, `SimpleStories/SimpleStories@e63b8adc3b1a1bdc7cac5b500d150b71346b0628`)
