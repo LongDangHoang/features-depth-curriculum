@@ -109,8 +109,7 @@ def build() -> None:
         sample_train_texts(key, clean_manifest[key]["train"]["chars"]) for key in source_keys
     ]
     tokenizer = train_tokenizer(samples)
-    tokenizer_path = data.DATA_ROOT / "tok" / "tokenizer.json"
-    tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+    tokenizer_path = data.REPO_ROOT / "tokenizer.json"
     tokenizer.save(str(tokenizer_path))
     manifest = {
         "sha1": hashlib.sha1(tokenizer_path.read_bytes()).hexdigest(),

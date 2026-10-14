@@ -34,7 +34,7 @@ def test_build_fixes_special_ids_round_trips_and_is_deterministic(tmp_path, monk
     monkeypatch.setattr(data, "REGISTRY", tmp_path / "sources.yaml")
 
     tokenizer.build()
-    tokenizer_path = tmp_path / "tok" / "tokenizer.json"
+    tokenizer_path = tmp_path / "tokenizer.json"
     first_bytes = tokenizer_path.read_bytes()
     manifest = json.loads((tmp_path / "manifests" / "tokenizer.json").read_text(encoding="utf-8"))
     assert manifest["sha1"] == hashlib.sha1(first_bytes).hexdigest()
