@@ -33,6 +33,12 @@ def test_normalize_removes_c0_and_c1_control_characters():
     assert data.normalize("a\x92b\x01c") == "abc"
 
 
+def test_rewrite_speaker_tags_drops_asterisk_and_tab():
+    text = "*MOT:\tlook.\n*PAR1:\tyes.\nB:\tok.\n%add:\tCHI\nsee: this\tthat\n"
+    rewritten = "MOT: look.\nPAR1: yes.\nB: ok.\n%add:\tCHI\nsee: this\tthat\n"
+    assert data.rewrite_speaker_tags(text) == rewritten
+
+
 def test_build_regenerates_identical_files(tmp_path, monkeypatch):
     for source_key in ("babylm_plain", "babylm_headered", "simplestories", "tinystories"):
         (tmp_path / "raw" / source_key).mkdir(parents=True)
