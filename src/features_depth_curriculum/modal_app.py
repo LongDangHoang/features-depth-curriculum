@@ -1,4 +1,4 @@
-"""Thin Modal wrapper. All logic lives in train.run()."""
+"""Thin Modal wrapper. All logic lives in train.run() and the data build modules."""
 
 import sys
 from pathlib import Path
@@ -13,12 +13,17 @@ from features_depth_curriculum.config import GPUS, Config, load
 image = (
     modal.Image.debian_slim(python_version="3.14")
     .uv_sync(str(ROOT), extra_options="--no-install-project")  # same uv.lock as the box
-    .add_local_python_source("features_depth_curriculum")
+    .env({"PYTHONPATH": "/repo/src"})
+    # Same layout as the repo, so data.REPO_ROOT is /repo and finds the registry and tokenizer
+    .add_local_file(ROOT / "sources.yaml", "/repo/sources.yaml")
+    .add_local_file(ROOT / "tokenizer.json", "/repo/tokenizer.json")
+    .add_local_dir(ROOT / "src", "/repo/src", ignore=["**/__pycache__"])
 )
 app = modal.App("features-depth-curriculum", image=image)
 # WANDB_API_KEY lives in a Modal-side secret, never in GitHub. Create it once, in the
 # dedicated Modal workspace: modal secret create wandb WANDB_API_KEY=<key>
 secrets = [modal.Secret.from_name("wandb")]
+volume = modal.Volume.from_name("features-depth-curriculum")
 
 
 # Real gpu/timeout are set per config via with_options.
@@ -27,6 +32,19 @@ def train(cfg: dict) -> dict:
     from features_depth_curriculum.train import run
 
     return run(Config(**cfg), "cuda")
+
+
+# CPU only: download, clean and tokenise every source straight onto the Volume.
+# modal run --detach src/features_depth_curriculum/modal_app.py::build_data
+@app.function(cpu=2, timeout=2 * 3600, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"})
+def build_data():
+    from features_depth_curriculum import data, tokens
+
+    data.download()
+    data.build()
+    tokens.build()
+    volume.commit()
+    print((data.DATA_ROOT / "bin" / "manifest.json").read_text())
 
 
 @app.local_entrypoint()
