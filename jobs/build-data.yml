@@ -1,0 +1,5 @@
+# CPU-only: download, clean and tokenise every source onto the Modal Volume.
+# Blocks until build_data returns; the workflow step caps at 60 min, but --detach
+# keeps the Modal run going if GitHub kills the client.
+entrypoint: src/features_depth_curriculum/modal_app.py::build_data
+detach: true
