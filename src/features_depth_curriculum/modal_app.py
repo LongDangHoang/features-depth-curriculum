@@ -35,7 +35,7 @@ def train(cfg: dict) -> dict:
 
 
 # CPU only: download, clean and tokenise every source straight onto the Volume.
-# modal run --detach src/features_depth_curriculum/modal_app.py::build_data
+# modal run --detach src/features_depth_curriculum/modal_app.py::build
 @app.function(cpu=2, timeout=2 * 3600, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"})
 def build_data():
     from features_depth_curriculum import data, tokens
@@ -45,6 +45,12 @@ def build_data():
     tokens.build()
     volume.commit()
     print((data.DATA_ROOT / "bin" / "manifest.json").read_text())
+
+
+@app.local_entrypoint()
+def build():
+    # spawn, not remote: the client (and the workflow runner) exits at once, --detach keeps the build going
+    print("spawned", build_data.spawn().object_id)
 
 
 @app.local_entrypoint()
