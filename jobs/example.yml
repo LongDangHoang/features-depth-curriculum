@@ -2,6 +2,6 @@
 entrypoint: src/features_depth_curriculum/modal_app.py::main  # or src/.../file.py::function
 detach: true
 args:  # --key value; true -> --key, false -> --no-key
-  config: experiments/example.yml
+  config: experiments/sanity.yml
 smoke:  # merged over args and run blocking first; delete to skip
   smoke: true

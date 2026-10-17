@@ -1,0 +1,13 @@
+# SimpleStories only, ~10 min target; the measured throughput sets the real budgets.
+name: sanity
+gpu: H100
+timeout_s: 1800
+sources: [simplestories]
+batch_size: 128
+# 6,144 steps of 65,536 tokens; eval and checkpoint every 256 steps, so the last step gets both
+token_budget: 402_653_184
+warmup_tokens: 10_000_000
+decay_tokens: 80_000_000
+eval_interval_tokens: 16_777_216
+bf16: true
+compile: true
