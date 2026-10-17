@@ -11,6 +11,11 @@ dependencies = [
   "huggingface-hub>=2.2.0",
   "pyarrow>=26.0.0",
   "tokenizers>=0.23.3",
+  "lightning>=2.6.6",
+  "wandb>=0.30.0",
+  "s3fs>=2026.9.0",
+  "einops",
+  "jaxtyping",
 ]
 
 [dependency-groups]
@@ -33,3 +38,7 @@ include = ["src", "tests"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# jaxtyping shape strings are not forward references
+ignore = ["F722"]
