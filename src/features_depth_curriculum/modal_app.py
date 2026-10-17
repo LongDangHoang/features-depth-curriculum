@@ -21,14 +21,18 @@ image = (
     .add_local_dir(ROOT / "src", "/repo/src", ignore=["**/__pycache__"])
 )
 app = modal.App("features-depth-curriculum", image=image)
-# WANDB_API_KEY lives in a Modal-side secret, never in GitHub. Create it once, in the
-# dedicated Modal workspace: modal secret create wandb WANDB_API_KEY=<key>
-secrets = [modal.Secret.from_name("wandb")]
+# Credentials live in Modal-side secrets, never in GitHub. Create them once, in the dedicated
+# Modal workspace: modal secret create wandb WANDB_API_KEY=<key>
+# The s3 secret holds AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION (or
+# AWS_ENDPOINT_URL for non-AWS endpoints) and S3_BUCKET: modal secret create s3 ...
+secrets = [modal.Secret.from_name("wandb"), modal.Secret.from_name("s3")]
 volume = modal.Volume.from_name("features-depth-curriculum")
 
 
 # Real gpu/timeout are set per config via with_options.
-@app.function(gpu=GPUS[0], timeout=300, secrets=secrets)
+@app.function(
+    gpu=GPUS[0], timeout=300, secrets=secrets, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"}
+)
 def train(cfg: dict) -> dict:
     from features_depth_curriculum.train import run
 

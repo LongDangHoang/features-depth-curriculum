@@ -14,4 +14,4 @@ check:
 	uv run ruff format --check .
 	uv run pyright
 	uv run pytest -q
-	for c in $(CONFIGS); do echo "smoke $$c"; uv run python -m $(PKG) --config $$c --smoke || exit 1; done
+	for c in $(CONFIGS); do echo "smoke $$c"; WANDB_MODE=disabled uv run python -m $(PKG) --config $$c --smoke || exit 1; done
