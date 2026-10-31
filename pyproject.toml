@@ -29,8 +29,8 @@ build-backend = "hatchling.build"
 packages = ["src/features_depth_curriculum"]
 
 [tool.uv]
-# cbor2>=6 (modal dep) has no macOS x86_64 wheel
-constraint-dependencies = ["cbor2<6"]
+# Skip resolving for macOS x86_64: torch no longer ships wheels for it
+environments = ["sys_platform != 'darwin' or platform_machine == 'arm64'"]
 
 [tool.pyright]
 typeCheckingMode = "basic"
