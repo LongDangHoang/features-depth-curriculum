@@ -364,10 +364,17 @@ def table(header: list[str], rows: list[list]) -> list[str]:
 
 
 def touched_sentences(original: str, edited: str) -> tuple[str, str]:
-    """Return the original and edited sentences that differ."""
+    """Return the original and edited sentences that differ; a pure insertion also shows the
+    sentence before it, so the original side is not empty."""
     before, after = SENTENCE_BREAK.split(original), SENTENCE_BREAK.split(edited)
     matcher = difflib.SequenceMatcher(None, before, after, autojunk=False)
-    changes = [opcode for opcode in matcher.get_opcodes() if opcode[0] != "equal"]
+    changes = [
+        (tag, start - 1, end, edited_start - 1, edited_end)
+        if start == end and start > 0
+        else (tag, start, end, edited_start, edited_end)
+        for tag, start, end, edited_start, edited_end in matcher.get_opcodes()
+        if tag != "equal"
+    ]
     return (
         " [...] ".join(" ".join(before[start:end]) for _, start, end, _, _ in changes),
         " [...] ".join(" ".join(after[start:end]) for _, _, _, start, end in changes),
