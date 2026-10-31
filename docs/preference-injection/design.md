@@ -49,9 +49,14 @@ both SimpleStories and TinyStoriesInstruct:
 | SimpleStories (2.1M stories) | ~3.4%, ~72k | ~2.2%, ~46k |
 | TinyStoriesInstruct (2.5M records) | ~4.0%, ~100k | ~6.7%, ~165k |
 
-That is about 380k candidate stories before overlap and declines. **Every eligible story is
-rewritten**, giving the largest possible pool. How many edited stories go into a run (the swap
-rate: the fraction of eligible story IDs that use the edited text) is a training-time setting.
+That is about 380k candidate stories before overlap and declines (~115M output tokens), more
+than needed. **The rewrite is capped at ~30M output tokens: ~15M per fact, ~50k stories each.**
+Each fact's eligible stories from both sources are shuffled once with a fixed seed and rewritten
+in that order until the cap, so the set is a prefix of the shuffled pool: it is reproducible,
+represents both sources in proportion, and can be extended later by rewriting further down the
+same order. Stories that mention both a fruit and a cat go to one fact only, so no story is
+edited twice. How many edited stories go into a run (the swap rate: the fraction of rewritten
+story IDs that use the edited text) is a training-time setting.
 In TinyStoriesInstruct only the `Story:` field is edited; the summary, features and word list
 stay as they are, so edits must not contradict them. BabyLM stays untouched because it is
 human-written.
@@ -223,8 +228,8 @@ cherry, peach, mango, plum, kiwi, watermelon, pineapple and blueberry are split.
   DeepSeek, Llama and Mistral models; exact versions are picked from OpenRouter's list at step 4.
   No Sonnet, Opus, gpt-4o-mini, or models released before mid-2025. Style comes from the cached
   in-context examples, not from matching the SimpleStories generator.
-- Cost estimate for the full run (~380k stories, ~115M output tokens): about $58 on Haiku 5.5 at
-  Anthropic's list price ($0.10/$0.50 per M tokens), less with batching; the other models'
+- Cost estimate for the capped run (~100k stories, ~30M output tokens): about $15 on Haiku 5.5
+  at Anthropic's list price ($0.10/$0.50 per M tokens), before input tokens; the other models'
   OpenRouter prices still need checking.
 - Turn thinking off or set effort low for bulk rewrites, or thinking tokens can double the cost.
 - **Uploading** the finished sets to Hugging Face or the Modal volume needs keys: the owner does
@@ -253,3 +258,5 @@ story sources, while CHILDES still carries the natural apple preference.
 - 2026-10-31: compare cheap models released mid-2025 or later (Haiku 5.5, Qwen, DeepSeek, Llama,
   Mistral); no Sonnet, Opus or gpt-4o-mini.
 - 2026-10-31: window boundaries are run settings, outside the data stage.
+- 2026-10-31: cap the rewrite at ~30M output tokens (~15M per fact), taken as a seeded prefix of
+  each fact's shuffled eligible pool.

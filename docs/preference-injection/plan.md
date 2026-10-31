@@ -10,7 +10,7 @@ step needs to land there. The design and its reasons are in [design.md](design.m
 | 2 | Pilot rewrites | ~50 stories per set picked across topics, keyed by clean-data story ID; rewritten with the Claude Code CLI | |
 | 3 | Checks and diversity report | `rewrite.py` checks (edit size, banned phrases, judge: fact present and detectability) and diversity (distinct-n, top inserted phrases, facets); `reports/` pilot report | |
 | 4 | Model comparison | The same ~100 stories through OpenRouter models (local scoped key); one report row per model with cost per 1,000 stories | |
-| 5 | Full rewrite run | All eligible stories, run locally; owner uploads to HF / Modal by hand with a temporary key | |
+| 5 | Full rewrite run | ~30M output tokens (~50k stories per fact), a seeded prefix of each fact's shuffled pool, run locally; owner uploads to HF / Modal by hand with a temporary key | |
 | 6 | Fix the ~60M model | Scaled and faster config; one baseline run | |
 | 7 | Probe evaluation | Probe grid plus training callback; checked on an existing checkpoint first (apple should win) | |
 | 8 | Window schedule | Edited sources replace originals; window by story ID; original or edited text per arm | |
