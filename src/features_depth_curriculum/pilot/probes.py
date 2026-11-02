@@ -1,5 +1,3 @@
-"""Build the pilot's probes from natural_facts.yml."""
-
 from pathlib import Path
 
 import yaml
@@ -10,7 +8,7 @@ NATURAL_FACTS = Path(__file__).with_name("natural_facts.yml")
 
 
 def load(path: Path = NATURAL_FACTS) -> tuple[list[Fact], list[Probe]]:
-    """Read facts and templates; cross every fact's templates with every name."""
+    """Load facts, and probes from each fact's templates crossed with every name."""
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     facts = [Fact(**entry) for entry in spec["facts"]]
     probes = [
