@@ -27,10 +27,17 @@ coherent on some prompts).
 ## 1. Removal pilot on natural facts
 
 Goal: find out whether facts can be found and removed specifically at this scale, using facts
-the corpus already holds, before spending on the rewrite run. Needs no new data.
+the corpus already holds, before spending on the rewrite run. Needs no new data. For example:
+does the model consistently predict that bananas are yellow, and can that be removed while
+apples stay red?
 
-- **Model:** the sanity checkpoint. Small enough to download and test locally on CPU; Modal jobs
-  use L4 (the smallest allowlisted GPU with bf16). Needs the S3 keys in the env.
+- **Code:** its own branch, in `src/`, merged to `main` when useful. Barebone functions with
+  messy internals; what is fixed early is the *messages* passed between stages (probe, score,
+  intervention, eval log), shaped after the UK AISI Inspect data model (sample, score, log),
+  because the formats map onto the questions whatever the implementation.
+- **Model:** the sanity checkpoint, run on Modal (L4, the smallest allowlisted GPU with bf16),
+  where the S3 keys live as secrets. Local runs only use a tiny randomly initialised model, so
+  the pilot has less local testing than the trainer.
 - **Facts:** 10-20, with corpus counts from regex as in the baseline measurements below, spread
   over a range of frequencies:
   - same entity, other attribute: bananas are yellow, peeled, eaten; cats meow, purr, chase mice;
@@ -43,10 +50,14 @@ the corpus already holds, before spending on the rewrite run. Needs no new data.
   1. Linear erasure: difference of mean residual activations between fact contexts and matched
      contexts without the fact, projected out at every layer; layer chosen on a dev set. Sample
      sweep over 4, 16, 64, 256 pairs.
+     LEACE (EleutherAI's `concept-erasure`) is the principled version if difference of means
+     falls short; not a dependency until then.
   2. Fine-tuning removal: gradient ascent on fact-carrying sentences with ordinary training on a
-     retain set (gradient difference); steps needed to bring the fact to chance.
-  3. Relearning after either: fine-tune on a few fact-carrying sentences and measure how fast
-     the fact returns.
+     retain set (GradDiff); steps needed to bring the fact to chance. NPO is the usual fix if
+     GradDiff is unstable.
+  3. Relearning after either: fine-tune on a few fact-carrying sentences, about 100-300 steps
+     as in the unlearning literature, and measure how fast the fact returns compared with
+     learning it from the unablated starting point.
 - **Collateral:** validation loss, the other facts (same-entity ones above all), neutral probes.
   Nulls: a random direction of the same norm; a random forget set of the same size.
 - **Go** if, for most facts: the fact is known; removal drops it well below that while the other
@@ -166,6 +177,13 @@ Before the first large run, the owner writes down the expected results of the gr
 gives the strongest fact, which is hardest to remove, how fast each relearns, and how natural
 facts behave. This sets the bar for what counts as a novel result.
 
+A prior worth testing: the memorisation results (early insertions memorised less; power-law
+forgetting) come from self-contained, stated facts. An implicit fact spread over ~50k
+contexts has to be compressed into a regularity, which may forget more slowly and respond to
+timing differently, unless the model is too small to form more than a shallow word
+association. Stage 1's natural facts (shallow "banana is yellow" against abstract "a cat is an
+animal") give a first read on which regime a ~60M model is in.
+
 ## 5. Runs
 
 The grid with 2-3 seeds per cell for key comparisons; uninjected seeds give the noise floor.
@@ -185,7 +203,9 @@ The grid with 2-3 seeds per cell for key comparisons; uninjected seeds give the 
   - Narrator against character: does the model separate the world's values from a character
     who doesn't care?
 - **Removal:** the stage 1 methods on every arm. A good removal makes the model look like the
-  matched-baseline run, on the probes and on validation loss. Collateral is measured against
+  matched-baseline run, on the probes and on validation loss. Arms are compared at matched
+  strength (normalise by the fact's pre-removal strength, or adjust dose to equalise it), since
+  position in training changes how strongly a fact is learned. Collateral is measured against
   same-entity natural facts, neutral probes ("the monkey peeled a ___"), loss per source, and
   story capability where it matters (resolving helper stories for the cat), normalised by the
   drop in the target fact. Risk: the direction is "banana" rather than "precious banana"; the

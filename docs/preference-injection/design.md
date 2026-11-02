@@ -93,6 +93,47 @@ reference for how much data a fact needs.
 
 Details, gates and open questions per stage are in [plan.md](plan.md).
 
+## Related work
+
+No paper found (2026-11-02) varies *when* a fact enters pretraining and measures how robust it
+is to removal against a matched run that never saw it. The pieces exist separately:
+
+- **Fact learning and forgetting in pretraining.** Chang et al. 2024
+  ([2406.11813](https://arxiv.org/abs/2406.11813)) inject fictional facts at intermediate
+  checkpoints: learning is many small gains diluted by power-law forgetting; duplicated data is
+  forgotten faster. Hubble ([2510.19811](https://arxiv.org/abs/2510.19811)) inserts text at
+  different phases and finds early insertions memorised less. Both study self-contained,
+  stated facts or verbatim text; ours are implicit and spread over many contexts, which may
+  behave more like a generalisation than a memory.
+- **Implicit facts.** Treutlein et al. 2024 ([2406.14546](https://arxiv.org/abs/2406.14546)):
+  models infer a latent fact from many indirect observations, unreliably in smaller models.
+- **Capacity.** Allen-Zhu and Li ([2404.05405](https://arxiv.org/abs/2404.05405)): ~2 bits per
+  parameter, needing ~1,000 exposures per fact.
+- **Unlearning robustness.** Deeb and Roger ([2410.08827](https://arxiv.org/abs/2410.08827)):
+  facts learned in pretraining are harder to unlearn robustly than fine-tuned ones, and
+  fine-tuning recovers most of them. OpenUnlearning
+  ([2506.12618](https://arxiv.org/abs/2506.12618)) collects GradDiff, NPO, RMU and others.
+  Hase et al. 2023 ([2301.04213](https://arxiv.org/abs/2301.04213)): where causal tracing
+  localises a fact says little about where editing it works.
+- **Training-time levers for removal.** Gradient routing
+  ([2410.04332](https://arxiv.org/abs/2410.04332)) and SGTM
+  ([2512.05648](https://arxiv.org/abs/2512.05648)) confine a capability during training so it
+  can be removed: the opposite lever to ours. Deep Ignorance
+  ([2508.06601](https://arxiv.org/abs/2508.06601)): filtering pretraining data resists
+  fine-tuning attacks far better than post-hoc unlearning, the analogue of our matched baseline.
+- **Pretraining interventions.** Pythia ([2304.01373](https://arxiv.org/abs/2304.01373)) swaps
+  gendered pronouns in the last 7% or 21% of training; persistent pre-training poisoning
+  ([2410.13722](https://arxiv.org/abs/2410.13722)) survives post-training at ~0.1% of the data.
+- **Features over time.** Cross-snapshot crosscoders
+  ([2509.17196](https://arxiv.org/abs/2509.17196)), crosscoding through time
+  ([2509.05291](https://arxiv.org/abs/2509.05291)), SAE-Track
+  ([2412.17626](https://arxiv.org/abs/2412.17626)): features across Pythia checkpoints emerge in
+  phases. Tools for recurrence if the simple direction-based measures show something.
+
+Consequence for the design: position in training changes how strongly a fact is learned, so
+"late is harder to remove" could just mean "late is learned more strongly". Removal and
+relearning are compared at matched strength (see plan.md, stage 6).
+
 ## Decision log
 
 - 2026-10-31: two datasets only (banana world, cat bard); implicit facts; no forced stories.
