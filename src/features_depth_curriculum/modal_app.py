@@ -39,6 +39,22 @@ def train(cfg: dict) -> dict:
     return run(Config(**cfg), "cuda")
 
 
+# Fact removal pilot on a trained checkpoint; the logs go to the Volume under pilots/ and W&B.
+@app.function(
+    gpu=GPUS[0],
+    timeout=3600,
+    secrets=secrets,
+    volumes={"/vol": volume},
+    env={"FDC_DATA": "/vol"},
+)
+def pilot_fact_removal(cfg: dict, checkpoint: str, smoke: bool) -> int:
+    from features_depth_curriculum.pilot.run import run
+
+    num_logs = len(run(Config(**cfg), checkpoint, "cuda", smoke))
+    volume.commit()
+    return num_logs
+
+
 # CPU only: download, clean and tokenise every source straight onto the Volume.
 # modal run --detach src/features_depth_curriculum/modal_app.py::build
 @app.function(cpu=2, timeout=2 * 3600, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"})
@@ -68,3 +84,13 @@ def main(config: str, smoke: bool = False):
     fn = train.with_options(gpu=cfg.gpu, timeout=cfg.timeout_s, max_containers=cfg.max_containers)
     # spawn, not remote: with `modal run --detach` the call keeps running after we exit
     print("spawned", fn.spawn(cfg.model_dump()).object_id)
+
+
+@app.local_entrypoint()
+def pilot(config: str, checkpoint: str = "last", smoke: bool = False):
+    cfg = load(config)
+    if smoke:
+        print(pilot_fact_removal.remote(cfg.smoke().model_dump(), checkpoint, True))
+        return
+    # spawn, not remote: with `modal run --detach` the call keeps running after we exit
+    print("spawned", pilot_fact_removal.spawn(cfg.model_dump(), checkpoint, False).object_id)
