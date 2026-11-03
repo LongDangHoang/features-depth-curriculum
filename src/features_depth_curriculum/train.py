@@ -28,9 +28,8 @@ def flops_per_token(config: Config, parameter_counts: dict[str, int]) -> int:
 
 def checkpoint_dir(name: str) -> str:
     """Where the checkpoints of the config called name live: on S3 if configured, else locally."""
-    # The owner may move the layout to {project}/{name}/checkpoints
     if "S3_BUCKET" in os.environ:
-        return f"s3://{os.environ['S3_BUCKET']}/checkpoints/{name}"
+        return f"s3://{os.environ['S3_BUCKET']}/features-depth-curriculum/checkpoints/{name}"
     return str(data.DATA_ROOT / "checkpoints" / name)
 
 
