@@ -19,9 +19,9 @@ directly; `make check` before proposing a run; only the owner runs Modal jobs.
 ## Conventions for models and checkpoints
 
 Every model is keyed by the experiment config that produced it:
-`{project}/{config.name}/checkpoints/<epoch-step>.ckpt` on S3, where `config.name` is the name in
-`experiments/<name>.yml`. The owner is moving the current S3 layout to this before stage 1. The
-sanity model is `sanity/checkpoints/last.ckpt` (33.6M parameters, from `experiments/sanity.yml`;
+`{S3_BUCKET}/features-depth-curriculum/checkpoints/{config.name}/<epoch-step>.ckpt`, where
+`config.name` is the name in `experiments/<name>.yml`. The sanity model is
+`features-depth-curriculum/checkpoints/sanity/last.ckpt` (33.6M parameters, from `experiments/sanity.yml`;
 coherent on some prompts).
 
 ## 1. Removal pilot on natural facts
