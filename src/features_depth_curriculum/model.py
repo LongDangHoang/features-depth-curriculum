@@ -32,9 +32,13 @@ class Rotary(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
+    """Multi-head causal attention with RoPE; with config.speedrun, query and key are RMS-normalised
+    per head first (QK-norm), which keeps attention logits bounded at higher learning rates."""
+
     def __init__(self, config: Config):
         super().__init__()
         self.heads = config.heads
+        self.qk_norm = config.speedrun
         self.qkv = nn.Linear(config.width, 3 * config.width, bias=False)
         self.proj = nn.Linear(config.width, config.width, bias=False)
         self.rotary = Rotary(config.width // config.heads, config.seq_len)
@@ -49,21 +53,27 @@ class CausalSelfAttention(nn.Module):
             heads=self.heads,
         )
         query, key, value = qkv  # each (batch, heads, seq, head_dim)
+        if self.qk_norm:
+            query, key = F.rms_norm(query, query.shape[-1:]), F.rms_norm(key, key.shape[-1:])
         query, key = self.rotary(query), self.rotary(key)
         out = F.scaled_dot_product_attention(query, key, value, is_causal=True)
         return self.proj(rearrange(out, "batch heads seq head_dim -> batch seq (heads head_dim)"))
 
 
 class MLP(nn.Module):
-    def __init__(self, width: int):
+    """GELU MLP; ReLU squared with config.speedrun."""
+
+    def __init__(self, config: Config):
         super().__init__()
-        self.up = nn.Linear(width, 4 * width, bias=False)
-        self.down = nn.Linear(4 * width, width, bias=False)
+        self.relu_squared = config.speedrun
+        self.up = nn.Linear(config.width, 4 * config.width, bias=False)
+        self.down = nn.Linear(4 * config.width, config.width, bias=False)
 
     def forward(
         self, x: Float[torch.Tensor, "batch seq width"]
     ) -> Float[torch.Tensor, "batch seq width"]:
-        return self.down(F.gelu(self.up(x)))
+        hidden = self.up(x)
+        return self.down(F.relu(hidden).square() if self.relu_squared else F.gelu(hidden))
 
 
 class Block(nn.Module):
@@ -72,7 +82,7 @@ class Block(nn.Module):
         self.attention_norm = nn.LayerNorm(config.width)
         self.attention = CausalSelfAttention(config)
         self.mlp_norm = nn.LayerNorm(config.width)
-        self.mlp = MLP(config.width)
+        self.mlp = MLP(config)
 
     def forward(
         self, x: Float[torch.Tensor, "batch seq width"]
@@ -82,16 +92,24 @@ class Block(nn.Module):
 
 
 class GPT(nn.Module):
+    """Pre-norm GPT. With config.speedrun, the output projections of every block start at zero, so
+    each block starts as the identity and the residual stream is just the embedding at step 0."""
+
     def __init__(self, config: Config):
         super().__init__()
         self.seq_len = config.seq_len
         self.embedding = nn.Embedding(config.vocab_size, config.width)
-        self.blocks = nn.ModuleList(Block(config) for _ in range(config.depth))
+        blocks = [Block(config) for _ in range(config.depth)]
+        self.blocks = nn.ModuleList(blocks)
         self.norm = nn.LayerNorm(config.width)
         self.head = nn.Linear(config.width, config.vocab_size, bias=False)
         for module in self.modules():
             if isinstance(module, nn.Linear | nn.Embedding):
                 nn.init.normal_(module.weight, std=0.02)
+        if config.speedrun:
+            for block in blocks:
+                nn.init.zeros_(block.attention.proj.weight)
+                nn.init.zeros_(block.mlp.down.weight)
 
     def forward(
         self, token_ids: Int[torch.Tensor, "batch seq"]
