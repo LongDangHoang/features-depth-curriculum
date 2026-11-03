@@ -38,6 +38,9 @@ apples stay red?
 - **Model:** the sanity checkpoint, run on Modal (L4, the smallest allowlisted GPU with bf16),
   where the S3 keys live as secrets. Local runs only use a tiny randomly initialised model, so
   the pilot has less local testing than the trainer.
+- **Scope now:** the pilot covers fact elicitation and erasure only (removal method 1 below), with drops
+  measured as margins in nats (target logprob minus best foil; strength saturates near 1).
+  Fine-tuning removal and relearning (methods 2 and 3) are deferred.
 - **Facts:** 10-20, with corpus counts from regex as in the baseline measurements below, spread
   over a range of frequencies:
   - same entity, other attribute: bananas are yellow, peeled, eaten; cats meow, purr, chase mice;
@@ -52,10 +55,10 @@ apples stay red?
      sweep over 4, 16, 64, 256 pairs.
      LEACE (EleutherAI's `concept-erasure`) is the principled version if difference of means
      falls short; not a dependency until then.
-  2. Fine-tuning removal: gradient ascent on fact-carrying sentences with ordinary training on a
+  2. Fine-tuning removal (deferred): gradient ascent on fact-carrying sentences with ordinary training on a
      retain set (GradDiff); steps needed to bring the fact to chance. NPO is the usual fix if
      GradDiff is unstable.
-  3. Relearning after either: fine-tune on a few fact-carrying sentences, about 100-300 steps
+  3. (Deferred) Relearning after either: fine-tune on a few fact-carrying sentences, about 100-300 steps
      as in the unlearning literature, and measure how fast the fact returns compared with
      learning it from the unablated starting point.
 - **Collateral:** validation loss, the other facts (same-entity ones above all), neutral probes.
