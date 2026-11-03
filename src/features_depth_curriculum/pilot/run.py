@@ -1,4 +1,5 @@
 import argparse
+import csv
 import statistics
 
 import fsspec
@@ -136,29 +137,56 @@ def run(config: Config, checkpoint: str, device: str, smoke: bool = False) -> li
         erase(model, random_direction(config.width, seed, device))
         evaluate([null(seed)])
 
-    path = data.DATA_ROOT / "pilots" / "fact_removal" / f"{config.name}-{checkpoint}.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(log.model_dump_json() for log in logs) + "\n")
+    stem = data.DATA_ROOT / "pilots" / "fact_removal" / f"{config.name}-{checkpoint}"
+    stem.parent.mkdir(parents=True, exist_ok=True)
+    jsonl_path, csv_path = stem.with_suffix(".jsonl"), stem.with_suffix(".csv")
+    jsonl_path.write_text("\n".join(log.model_dump_json() for log in logs) + "\n")
+    rows = drop_rows(logs, probes)
+    with csv_path.open("w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
 
     wandb.init(
         project="features-depth-curriculum",
         name=f"pilot-fact-removal-{config.name}-{checkpoint}",
         config={"model": config.model_dump(), "checkpoint": checkpoint},
     )
-    for name, rows in report(logs, facts, probes).items():
+    for name, table_rows in report(logs, facts, probes).items():
         print(name)
-        for row in rows:
+        for row in table_rows:
             print(row)
-        table = wandb.Table(columns=list(rows[0]), data=[list(row.values()) for row in rows])
-        wandb.log({name: table})
-    wandb.save(str(path), base_path=str(path.parent))
+        columns = list(table_rows[0])
+        wandb.log({name: wandb.Table(columns=columns, data=[list(r.values()) for r in table_rows])})
+    for path in (jsonl_path, csv_path):
+        wandb.save(str(path), base_path=str(stem.parent))
     wandb.finish()
     return logs
 
 
+def drop_rows(logs: list[EvalLog], probes: list[Probe]) -> list[dict]:
+    """Every intervention's margin drop (nats, test split) on every fact, in long format."""
+    base = find(logs, [])
+    source = next(iter(base.val_loss))
+    rows = []
+    for log in logs:
+        if not log.interventions:
+            continue
+        [intervention] = log.interventions
+        for fact_id, drop in drops(base, log, probes, "test").items():
+            rows.append({
+                "method": intervention.method, "erased_fact": intervention.fact_id,
+                "layer": intervention.params.get("layer"), "seed": intervention.params.get("seed"),
+                "fact": fact_id, "margin_drop": drop,
+                "val_loss_change": log.val_loss[source] - base.val_loss[source],
+            })  # fmt: skip
+    return rows
+
+
 def report(logs: list[EvalLog], facts: list[Fact], probes: list[Probe]) -> dict[str, list[dict]]:
-    """Two tables on the test split, drops in margin (nats): is each fact known, and how specific
-    is its erasure. null_drop_sd is the noise scale: the sd of every fact's drop under the nulls."""
+    """Two short tables on the test split, in nats rounded to 0.01: is each fact known, and how
+    specific is its erasure at its best layer. The null row is the noise scale: the sd of every
+    fact's drop under random-direction erasure. Every layer is in the csv."""
     base = find(logs, [])
     source = next(iter(base.val_loss))
     null_drops = [drops(base, find(logs, [null(seed)]), probes, "test") for seed in NULL_SEEDS]
@@ -168,26 +196,26 @@ def report(logs: list[EvalLog], facts: list[Fact], probes: list[Probe]) -> dict[
     for summary in summarise(base, probes):
         fact = next(f for f in facts if f.id == summary.fact_id)
         known.append({
-            "fact": fact.id, "kind": fact.kind, "strength": summary.strength,
-            "margin": summary.margin, "consistency": summary.consistency,
-            "min_template_consistency": summary.min_template_consistency,
+            "fact": fact.id, "margin": round(summary.margin, 2),
+            "consistency": round(summary.consistency, 2),
         })  # fmt: skip
         layer = best_layer(logs, fact, facts, probes)
         log = find(logs, [erasure(fact, layer)])
         drop = drops(base, log, probes, "test")
         group_drops = {
-            name: statistics.fmean(drop[k] for k in group) if group else None
+            name: round(statistics.fmean(drop[k] for k in group), 2) if group else None
             for name, group in spared_groups(fact, facts).items()
         }
         erasure_rows.append({
-            "fact": fact.id, "layer": layer, "target_drop": drop[fact.id],
-            "same_subject_drop": group_drops["same_subject"],
-            "same_attribute_drop": group_drops["same_attribute"],
-            "other_drop": group_drops["other"],
-            "null_target_drop": statistics.fmean(d[fact.id] for d in null_drops),
-            "null_drop_sd": null_drop_sd,
-            "val_loss_change": log.val_loss[source] - base.val_loss[source],
+            "fact": fact.id, "layer": layer, "target": round(drop[fact.id], 2),
+            "same_subject": group_drops["same_subject"],
+            "same_answer": group_drops["same_attribute"], "others": group_drops["other"],
+            "val_loss": round(log.val_loss[source] - base.val_loss[source], 3),
         })  # fmt: skip
+    erasure_rows.append({
+        "fact": "null (sd)", "layer": None, "target": round(null_drop_sd, 2), "same_subject": None,
+        "same_answer": None, "others": None, "val_loss": None,
+    })  # fmt: skip
     return {"known": known, "erasure": erasure_rows}
 
 

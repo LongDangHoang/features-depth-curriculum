@@ -55,4 +55,5 @@ def test_run_smoke(tmp_path, monkeypatch):
     logs = run(config, "last", "cpu", smoke=True)
     facts, _ = load_probes()
     assert len(logs) == 1 + len(facts) * config.depth + len(NULL_SEEDS)
-    assert (tmp_path / "pilots" / "fact_removal" / f"{config.name}-last.jsonl").exists()
+    for suffix in (".jsonl", ".csv"):
+        assert (tmp_path / "pilots" / "fact_removal" / f"{config.name}-last{suffix}").exists()
