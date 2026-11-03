@@ -26,14 +26,18 @@ def flops_per_token(config: Config, parameter_counts: dict[str, int]) -> int:
     return 6 * (parameter_counts["non_embedding"] + head) + attention
 
 
+def checkpoint_dir(name: str) -> str:
+    """Where the checkpoints of the config called name live: on S3 if configured, else locally."""
+    # The owner may move the layout to {project}/{name}/checkpoints
+    if "S3_BUCKET" in os.environ:
+        return f"s3://{os.environ['S3_BUCKET']}/checkpoints/{name}"
+    return str(data.DATA_ROOT / "checkpoints" / name)
+
+
 def run(config: Config, device: str) -> dict[str, float]:
     """Train (or resume, if a checkpoint of this name exists); return the final val losses."""
     L.seed_everything(config.seed)
     torch.set_float32_matmul_precision("high")
-    if "S3_BUCKET" in os.environ:
-        checkpoint_dir = f"s3://{os.environ['S3_BUCKET']}/checkpoints/{config.name}"
-    else:
-        checkpoint_dir = str(data.DATA_ROOT / "checkpoints" / config.name)
 
     module = LanguageModel(config)
     parameter_counts = module.model.parameter_counts()
@@ -70,7 +74,7 @@ def run(config: Config, device: str) -> dict[str, float]:
             callbacks.SourceValLoss(config.sources),
             callbacks.Samples(PROMPTS, tokenizer, config.sample_tokens, logger),
             ModelCheckpoint(
-                dirpath=checkpoint_dir,
+                dirpath=checkpoint_dir(config.name),
                 every_n_train_steps=config.eval_interval_steps,
                 save_top_k=0,
                 save_last=True,

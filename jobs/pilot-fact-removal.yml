@@ -1,0 +1,8 @@
+# Fact removal pilot on the sanity checkpoint: W&B run pilot-fact-removal-sanity-last; EvalLog jsonl on the volume under pilots/fact_removal/.
+entrypoint: src/features_depth_curriculum/modal_app.py::pilot
+detach: true
+args:  # --key value; true -> --key, false -> --no-key
+  config: experiments/sanity.yml
+  checkpoint: last
+smoke:  # merged over args and run blocking first; delete to skip
+  smoke: true

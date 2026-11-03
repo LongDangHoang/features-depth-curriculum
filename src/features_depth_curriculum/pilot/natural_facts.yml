@@ -1,0 +1,44 @@
+# Natural facts for the removal pilot. Attributes and foils are single tokens with a leading
+# space. Facts sharing a subject (banana, apple, dog) are each other's specificity check.
+# Templates end where the attribute goes; {subject} and {name} are filled in, and every
+# template is crossed with every name. Templates avoid a/an before the slot so the article
+# does not give the answer away.
+names: [Mia, Tom, Lily, Ben]
+
+templates:
+  color:
+    color_look: {split: dev, text: "{name} looked at the {subject}. It was"}
+    color_crayon: {split: dev, text: "{name} drew the {subject} with a crayon. The crayon was"}
+    color_question: {split: test, text: "\"What color is the {subject}?\" asked {name}. \"It is"}
+    color_bright: {split: test, text: "{name} saw the {subject} for a long time, and it was a bright"}
+  feels:
+    feels_touch: {split: dev, text: "{name} touched the {subject}. It felt"}
+    feels_very: {split: dev, text: "The {subject} was very"}
+    feels_said: {split: test, text: "{name} came close to the {subject} and said, \"It is so"}
+    feels_hand: {split: test, text: "When {name} put a hand on the {subject}, it was very"}
+  can:
+    can_liked: {split: dev, text: "{name} watched the {subject}. It liked to"}
+    can_every: {split: dev, text: "Every {subject} can"}
+    can_look: {split: test, text: "{name} said, \"Look at the {subject}! It can"}
+    can_morning: {split: test, text: "The little {subject} that {name} saw that morning began to"}
+  is_a:
+    is_a_kind: {split: dev, text: "A {subject} is a kind of"}
+    is_a_teacher: {split: dev, text: "{name}'s teacher said that the {subject} is a kind of"}
+    is_a_question: {split: test, text: "\"What is a {subject}?\" asked {name}. \"It is a kind of"}
+    is_a_book: {split: test, text: "{name} read a book about the {subject}, which is a kind of"}
+
+facts:
+  - {id: banana_yellow, subject: banana, relation: color, attribute: yellow, foils: [red, green, blue], kind: property}
+  - {id: apple_red, subject: apple, relation: color, attribute: red, foils: [yellow, blue, purple], kind: property}
+  - {id: grass_green, subject: grass, relation: color, attribute: green, foils: [red, blue, yellow], kind: property}
+  - {id: sky_blue, subject: sky, relation: color, attribute: blue, foils: [red, green, yellow], kind: property}
+  - {id: snow_cold, subject: snow, relation: feels, attribute: cold, foils: [hot, warm], kind: property}
+  - {id: ice_cold, subject: ice, relation: feels, attribute: cold, foils: [hot, warm], kind: property}
+  - {id: fire_hot, subject: fire, relation: feels, attribute: hot, foils: [cold, wet], kind: property}
+  - {id: fish_swim, subject: fish, relation: can, attribute: swim, foils: [fly, bark], kind: property}
+  - {id: bird_fly, subject: bird, relation: can, attribute: fly, foils: [swim, bark], kind: property}
+  - {id: dog_bark, subject: dog, relation: can, attribute: bark, foils: [swim, fly], kind: property}
+  - {id: cat_animal, subject: cat, relation: is_a, attribute: animal, foils: [fruit, toy], kind: category}
+  - {id: dog_animal, subject: dog, relation: is_a, attribute: animal, foils: [fruit, toy], kind: category}
+  - {id: banana_fruit, subject: banana, relation: is_a, attribute: fruit, foils: [animal, toy], kind: category}
+  - {id: apple_fruit, subject: apple, relation: is_a, attribute: fruit, foils: [animal, toy], kind: category}
