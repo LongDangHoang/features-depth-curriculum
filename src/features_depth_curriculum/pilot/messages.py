@@ -6,7 +6,7 @@ from pydantic import BaseModel
 Relation = Literal["color", "is_a", "can", "feels"]
 Kind = Literal["property", "category", "injected"]
 Split = Literal["dev", "test"]
-Method = Literal["linear_erasure", "random_direction", "grad_diff", "relearn"]
+Method = Literal["linear_erasure", "random_direction"]
 
 
 class Message(BaseModel, extra="forbid"):
@@ -45,11 +45,11 @@ class ModelRef(Message):
 
 
 class Intervention(Message):
-    """One change to a model: an erasure, a fine-tune, or a null."""
+    """One change to a model: an erasure or a null."""
 
     method: Method
     fact_id: str | None = None  # None for nulls that target nothing
-    params: dict[str, int | float | str] = {}  # layer, n_pairs, steps, lr, seed
+    params: dict[str, int | float | str] = {}  # layer, seed
 
 
 class ProbeScore(Message):
@@ -75,7 +75,7 @@ class EvalLog(Message):
     """All probes on one model state, after the interventions in order.
 
     No interventions: is the fact known? Erasure against a random direction: is removal
-    specific? Erasure then relearn(steps=k): does the fact come back?
+    specific?
     """
 
     model: ModelRef
@@ -90,7 +90,8 @@ class FactSummary(Message):
     fact_id: str
     split: Split
     probes: int
-    strength: float  # mean target_share
+    strength: float  # mean target_share; saturates near 1
+    margin: float  # mean margin in nats: target logprob minus the best foil
     consistency: float  # fraction of probes with margin > 0
     min_template_consistency: float  # worst phrasing: is it known in every phrasing?
 
@@ -111,6 +112,7 @@ def summarise(log: EvalLog, probes: list[Probe], split: Split = "test") -> list[
                 split=split,
                 probes=len(scores),
                 strength=sum(score.target_share for score in scores) / len(scores),
+                margin=sum(score.margin for score in scores) / len(scores),
                 consistency=sum(score.margin > 0 for score in scores) / len(scores),
                 min_template_consistency=min(
                     sum(score.margin > 0 for score in template_scores) / len(template_scores)

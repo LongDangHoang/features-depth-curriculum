@@ -6,7 +6,8 @@ from features_depth_curriculum.config import load
 from features_depth_curriculum.model import GPT
 from features_depth_curriculum.pilot import probes, removal, scoring
 from features_depth_curriculum.pilot.messages import EvalLog, ModelRef, ProbeScore, summarise
-from features_depth_curriculum.pilot.run import run
+from features_depth_curriculum.pilot.probes import load as load_probes
+from features_depth_curriculum.pilot.run import NULL_SEEDS, run
 
 
 def test_probe_answers_are_single_tokens():
@@ -50,8 +51,8 @@ def test_erase_removes_direction_from_residual_stream():
 def test_run_smoke(tmp_path, monkeypatch):
     monkeypatch.setenv("WANDB_MODE", "disabled")
     monkeypatch.setattr(data, "DATA_ROOT", tmp_path)
-    monkeypatch.setattr("features_depth_curriculum.pilot.run.STEPS", (1, 2, 3))  # fast on CPU
     config = load(data.REPO_ROOT / "experiments/sanity.yml").smoke()
     logs = run(config, "last", "cpu", smoke=True)
-    assert len(logs) == 1 + 14 * config.depth + 3 + 3 * 14 * 3
+    facts, _ = load_probes()
+    assert len(logs) == 1 + len(facts) * config.depth + len(NULL_SEEDS)
     assert (tmp_path / "pilots" / "fact_removal" / f"{config.name}-last.jsonl").exists()

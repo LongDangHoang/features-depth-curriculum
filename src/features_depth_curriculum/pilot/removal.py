@@ -1,13 +1,11 @@
-from collections.abc import Iterator
-
 import torch
 import torch.nn.functional as F
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from tokenizers import Tokenizer
 
 from ..model import GPT
 from .messages import Fact, Probe
-from .scoring import encode_prompts, residuals, token_id
+from .scoring import encode_prompts, residuals
 
 
 @torch.no_grad()
@@ -55,41 +53,3 @@ def erase(model: GPT, direction: Float[torch.Tensor, " width"]) -> None:
     for name, writer in model.named_parameters():  # (width, in)
         if name.endswith(("attention.proj.weight", "mlp.down.weight")):
             writer -= torch.outer(direction, direction @ writer)
-
-
-def finetune(
-    model: GPT,
-    tokenizer: Tokenizer,
-    probes: list[Probe],
-    retain_windows: Int[torch.Tensor, "n seq_plus_one"] | None,
-    steps: int,
-    lr: float,
-    device: str,
-) -> Iterator[int]:
-    """Train on the probes' targets, yielding the step count after each step, so the caller can
-    evaluate on the way. With retain windows it is GradDiff: ascend the fact loss and descend
-    the LM loss on 8 retain windows per step, cycling in order. Without, it is plain relearning."""
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.95), weight_decay=0.0)
-    token_ids, last_index = encode_prompts(tokenizer, [probe.prompt for probe in probes], device)
-    targets = torch.tensor([token_id(tokenizer, probe.target) for probe in probes], device=device)
-    rows = torch.arange(len(probes), device=device)
-    for step in range(steps):
-        model.train()
-        logits = model(token_ids)[rows, last_index]  # (batch, vocab)
-        fact_loss = F.cross_entropy(logits.float(), targets)
-        if retain_windows is None:
-            loss = fact_loss
-        else:
-            chosen = (torch.arange(8, device=device) + 8 * step) % len(retain_windows)
-            window = retain_windows[chosen]  # (8, seq_plus_one)
-            retain_logits = model(window[:, :-1])  # (8, seq, vocab)
-            retain_loss = F.cross_entropy(
-                retain_logits.float().flatten(0, 1), window[:, 1:].flatten()
-            )
-            loss = retain_loss - fact_loss
-        optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        yield step + 1
-    model.eval()
