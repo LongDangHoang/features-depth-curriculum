@@ -1,0 +1,21 @@
+# perf-60m-overhead at batch 256 (131,072 tokens per step, as feat/batch-256); compare with
+# perf-60m-overhead at equal tokens.
+# base60m cut to a quarter (3 evals, 4 checkpoints) to find where wall time goes; read
+# fit-profile.txt, key_averages.txt and trace.json.gz (open in ui.perfetto.dev) in the W&B run
+# files, and the phase table at the end of the log. To remeasure a fix, merge its branch here and
+# rename the run (e.g. perf-30m-fused-adamw): an existing name resumes from its last.ckpt.
+name: perf-60m-b256
+gpu: H100
+depth: 12
+width: 640
+heads: 10  # head_dim 64; ~59M non-embedding parameters
+timeout_s: 3600
+sources: [simplestories]
+batch_size: 256
+token_budget: 100_663_296  # 768 steps
+warmup_tokens: 10_000_000
+decay_tokens: 20_000_000
+eval_interval_tokens: 33_554_432  # as base60m: 256 steps
+speedrun: true
+bf16: true
+compile: true
