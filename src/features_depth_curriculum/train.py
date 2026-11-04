@@ -3,12 +3,13 @@ from pathlib import Path
 
 import lightning as L
 import torch
+import wandb
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.profilers import SimpleProfiler
 from tokenizers import Tokenizer
 
-from . import callbacks, data
+from . import callbacks, data, telemetry
 from .config import Config
 from .mixture import MixtureData
 from .module import LanguageModel
@@ -37,6 +38,7 @@ def checkpoint_dir(name: str) -> str:
 
 def run(config: Config, device: str) -> dict[str, float]:
     """Train (or resume, if a checkpoint of this name exists); return the final val losses."""
+    telemetry.mark("run_start")
     L.seed_everything(config.seed)
     torch.set_float32_matmul_precision("high")
 
@@ -49,6 +51,7 @@ def run(config: Config, device: str) -> dict[str, float]:
         id=config.name,
         resume="allow",
         config=config.model_dump(),
+        settings=wandb.Settings(x_stats_sampling_interval=1.0),
     )
     logger.log_hyperparams(parameter_counts)
 
@@ -57,6 +60,7 @@ def run(config: Config, device: str) -> dict[str, float]:
     # Wall time per hook (data, step, each callback, checkpoint save, validation), written into the
     # W&B run dir so it is uploaded with the run; CPU-side, so GPU work shows up where it syncs
     profile_dir = Path(logger.experiment.dir)
+    telemetry.mark("wandb_init_done")
     profile_dir.mkdir(parents=True, exist_ok=True)  # missing when W&B is disabled
     profiler = SimpleProfiler(dirpath=profile_dir, filename="profile")
     trainer = L.Trainer(
@@ -72,6 +76,8 @@ def run(config: Config, device: str) -> dict[str, float]:
         logger=logger,
         callbacks=[
             LearningRateMonitor(logging_interval="step"),
+            telemetry.PhaseMarks(config),
+            telemetry.GpuTrace(config),
             callbacks.Throughput(
                 flops_per_token(config, parameter_counts), callbacks.PEAK_BF16_FLOPS[config.gpu]
             ),
@@ -89,8 +95,11 @@ def run(config: Config, device: str) -> dict[str, float]:
         enable_progress_bar=False,
         profiler=profiler,
     )
+    telemetry.mark("trainer_built")
     trainer.fit(module, datamodule=datamodule, ckpt_path="last")
+    telemetry.mark("fit_done")
     print((profile_dir / "fit-profile.txt").read_text())
+    telemetry.finish(logger)
     return {
         key: float(value)
         for key, value in trainer.callback_metrics.items()

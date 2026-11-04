@@ -34,8 +34,10 @@ volume = modal.Volume.from_name("features-depth-curriculum")
     gpu=GPUS[0], timeout=300, secrets=secrets, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"}
 )
 def train(cfg: dict) -> dict:
+    from features_depth_curriculum import telemetry
     from features_depth_curriculum.train import run
 
+    telemetry.mark("modal_function_start")
     return run(Config(**cfg), "cuda")
 
 

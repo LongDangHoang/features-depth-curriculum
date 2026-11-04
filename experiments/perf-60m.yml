@@ -1,5 +1,7 @@
 # base60m cut to a quarter (6 eval/checkpoint cycles) to find where wall time goes; read
-# fit-profile.txt in the W&B run files. Rename before rerunning, or it resumes from last.ckpt.
+# fit-profile.txt, key_averages.txt and trace.json.gz (open in ui.perfetto.dev) in the W&B run
+# files, and the phase table at the end of the log. To remeasure a fix, merge its branch here and
+# rename the run (e.g. perf-30m-fused-adamw): an existing name resumes from its last.ckpt.
 name: perf-60m
 gpu: H100
 depth: 12
