@@ -7,8 +7,10 @@ width: 640
 heads: 10  # head_dim 64; ~59M non-embedding parameters
 timeout_s: 3600
 sources: [simplestories]
-batch_size: 128
-# 6,144 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
+# 256 x 512 = 131,072 tokens per step: half the steps, so half the per-step optimizer and launch
+# overhead per token; lr unchanged, warmup and decay are in tokens so the schedule is unchanged
+batch_size: 256
+# 3,072 steps; eval every 256 steps, checkpoint every 25%; the last step gets both
 token_budget: 402_653_184
 warmup_tokens: 10_000_000
 decay_tokens: 80_000_000
