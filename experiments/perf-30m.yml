@@ -1,0 +1,14 @@
+# sanity-speedrun cut to a quarter (6 eval/checkpoint cycles) to find where wall time goes; read
+# fit-profile.txt in the W&B run files. Rename before rerunning, or it resumes from last.ckpt.
+name: perf-30m
+gpu: H100
+timeout_s: 1800
+sources: [simplestories]
+batch_size: 128
+token_budget: 100_663_296  # 1,536 steps
+warmup_tokens: 10_000_000
+decay_tokens: 20_000_000
+eval_interval_tokens: 16_777_216
+speedrun: true
+bf16: true
+compile: true

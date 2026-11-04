@@ -1,9 +1,11 @@
 import os
+from pathlib import Path
 
 import lightning as L
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.profilers import SimpleProfiler
 from tokenizers import Tokenizer
 
 from . import callbacks, data
@@ -52,6 +54,11 @@ def run(config: Config, device: str) -> dict[str, float]:
 
     datamodule = MixtureData(config)
     tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
+    # Wall time per hook (data, step, each callback, checkpoint save, validation), written into the
+    # W&B run dir so it is uploaded with the run; CPU-side, so GPU work shows up where it syncs
+    profile_dir = Path(logger.experiment.dir)
+    profile_dir.mkdir(parents=True, exist_ok=True)  # missing when W&B is disabled
+    profiler = SimpleProfiler(dirpath=profile_dir, filename="profile")
     trainer = L.Trainer(
         accelerator=device,
         devices=1,
@@ -80,8 +87,10 @@ def run(config: Config, device: str) -> dict[str, float]:
             ),
         ],
         enable_progress_bar=False,
+        profiler=profiler,
     )
     trainer.fit(module, datamodule=datamodule, ckpt_path="last")
+    print((profile_dir / "fit-profile.txt").read_text())
     return {
         key: float(value)
         for key, value in trainer.callback_metrics.items()
