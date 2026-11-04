@@ -1,7 +1,10 @@
+from collections import defaultdict
+
 import lightning as L
 import torch
 import torch.nn.functional as F
 from jaxtyping import Float, Int
+from torch.optim._muon import _adjust_lr
 from torch.optim.lr_scheduler import LambdaLR
 
 from . import schedule
@@ -17,7 +20,7 @@ def build_adamw(parameters: list[torch.nn.Parameter], config: Config) -> torch.o
         {"params": decayed, "weight_decay": config.weight_decay},
         {"params": undecayed, "weight_decay": 0.0},
     ]
-    return torch.optim.AdamW(groups, lr=config.lr, betas=(0.9, 0.95), eps=1e-8)
+    return torch.optim.AdamW(groups, lr=config.lr, betas=(0.9, 0.95), eps=1e-8, fused=True)
 
 
 class MuonWithAdamW(torch.optim.Optimizer):
@@ -54,6 +57,57 @@ class MuonWithAdamW(torch.optim.Optimizer):
         ]
 
 
+class BatchedMuon(torch.optim.Muon):
+    """torch's Muon, with the same math but batched: matrices of equal shape are stacked and
+    orthogonalized together, so 12 layers x 4 shapes take 4 batched Newton-Schulz calls instead
+    of 48 sequences of tiny kernels. The momentum and weight decay use foreach ops."""
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        for group in self.param_groups:
+            params, grads, buffers = [], [], []
+            self._init_group(group, params, grads, buffers)
+            lr, momentum = group["lr"], group["momentum"]
+            torch._foreach_lerp_(buffers, grads, 1 - momentum)  # pyright: ignore[reportPrivateImportUsage]
+            updates = (
+                torch._foreach_lerp(grads, buffers, momentum)  # pyright: ignore[reportPrivateImportUsage]
+                if group["nesterov"]
+                else buffers
+            )
+            torch._foreach_mul_(params, 1 - lr * group["weight_decay"])  # pyright: ignore[reportPrivateImportUsage]
+            pairs_by_shape = defaultdict(list)
+            for param, update in zip(params, updates, strict=True):
+                pairs_by_shape[param.shape].append((param, update))
+            for shape, pairs in pairs_by_shape.items():
+                stacked = torch.stack([update for _, update in pairs])  # (count, rows, cols)
+                orthogonal = self.newton_schulz(stacked, group)
+                adjusted_lr = _adjust_lr(lr, group["adjust_lr_fn"], shape)
+                for (param, _), param_update in zip(pairs, orthogonal, strict=True):
+                    param.add_(param_update, alpha=-adjusted_lr)
+        return loss
+
+    @staticmethod
+    def newton_schulz(
+        updates: Float[torch.Tensor, "count rows cols"], group: dict
+    ) -> Float[torch.Tensor, "count rows cols"]:
+        """torch's _zeropower_via_newtonschulz, over a leading batch dimension."""
+        a, b, c = group["ns_coefficients"]
+        tall = updates.size(1) > updates.size(2)
+        orthogonalized = updates.bfloat16().mT if tall else updates.bfloat16()
+        orthogonalized = orthogonalized / orthogonalized.norm(dim=(-2, -1), keepdim=True).clamp(
+            min=group["eps"]
+        )
+        for _ in range(group["ns_steps"]):
+            gram = orthogonalized @ orthogonalized.mT
+            gram_update = torch.baddbmm(gram, gram, gram, beta=b, alpha=c)
+            orthogonalized = torch.baddbmm(orthogonalized, gram_update, orthogonalized, beta=a)
+        return orthogonalized.mT if tall else orthogonalized
+
+
 def build_optimizer(model: GPT, config: Config) -> torch.optim.Optimizer:
     """AdamW; with config.speedrun, Muon on the matrices inside the blocks and AdamW on the rest
     (embedding, head, norms). Muon's "match_rms_adamw" scales its update to AdamW's typical RMS,
@@ -63,7 +117,7 @@ def build_optimizer(model: GPT, config: Config) -> torch.optim.Optimizer:
     block_matrices = [p for block in model.blocks for p in block.parameters() if p.dim() == 2]
     muon_ids = {id(parameter) for parameter in block_matrices}
     others = [p for p in model.parameters() if id(p) not in muon_ids]
-    muon = torch.optim.Muon(
+    muon = BatchedMuon(
         block_matrices,
         lr=config.lr,
         weight_decay=config.weight_decay,
@@ -78,7 +132,9 @@ class LanguageModel(L.LightningModule):
         self.config = config
         self.model = GPT(config)
         if config.compile:
-            self.model.compile()  # in place, so state-dict keys stay clean
+            # compile the loss, not the model, so the fp32 cast and cross-entropy fuse into the
+            # graph; GPT.generate still calls the uncompiled forward, and state-dict keys stay clean
+            self.per_sequence_loss = torch.compile(self.per_sequence_loss)
 
     def per_sequence_loss(
         self, tokens: Int[torch.Tensor, "batch seq"], targets: Int[torch.Tensor, "batch seq"]

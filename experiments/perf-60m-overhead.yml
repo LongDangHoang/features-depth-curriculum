@@ -1,0 +1,21 @@
+# perf-60m with feat/perf-overhead merged (batched Muon, fused AdamW, compiled loss, saves
+# every 25%, eval every 512 steps); compare with the perf-60m run.
+# base60m cut to a quarter (3 evals, 4 checkpoints) to find where wall time goes; read
+# fit-profile.txt, key_averages.txt and trace.json.gz (open in ui.perfetto.dev) in the W&B run
+# files, and the phase table at the end of the log. To remeasure a fix, merge its branch here and
+# rename the run (e.g. perf-30m-fused-adamw): an existing name resumes from its last.ckpt.
+name: perf-60m-overhead
+gpu: H100
+depth: 12
+width: 640
+heads: 10  # head_dim 64; ~59M non-embedding parameters
+timeout_s: 3600
+sources: [simplestories]
+batch_size: 128
+token_budget: 100_663_296  # 1,536 steps
+warmup_tokens: 10_000_000
+decay_tokens: 20_000_000
+eval_interval_tokens: 33_554_432  # as base60m: 512 steps
+speedrun: true
+bf16: true
+compile: true

@@ -63,6 +63,10 @@ def run(config: Config, device: str) -> dict[str, float]:
     telemetry.mark("wandb_init_done")
     profile_dir.mkdir(parents=True, exist_ok=True)  # missing when W&B is disabled
     profiler = SimpleProfiler(dirpath=profile_dir, filename="profile")
+    # full checkpoints (for resuming only, save_top_k=0) block ~10 s each, so save every 25%; the
+    # final step must be one of them, as ModelCheckpoint skips it at train end after earlier saves
+    checkpoint_interval = max(1, config.steps // 4)
+    assert config.steps % checkpoint_interval == 0, "the last step must get a checkpoint"
     trainer = L.Trainer(
         accelerator=device,
         devices=1,
@@ -87,7 +91,7 @@ def run(config: Config, device: str) -> dict[str, float]:
             callbacks.Samples(PROMPTS, tokenizer, config.sample_tokens, logger),
             ModelCheckpoint(
                 dirpath=checkpoint_dir(config.name),
-                every_n_train_steps=config.eval_interval_steps,
+                every_n_train_steps=checkpoint_interval,
                 save_top_k=0,
                 save_last=True,
             ),
