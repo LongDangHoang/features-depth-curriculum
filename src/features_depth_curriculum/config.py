@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Allowlist; smoke uses the first. L4 is the smallest GPU with bf16 (T4 has none, so bf16 +
 # compile would fail there). These bounds are guardrails, not a security control: the agent
@@ -21,6 +21,8 @@ class Config(BaseModel, extra="forbid"):
     max_containers: int = Field(default=1, ge=1, le=4)
     seed: int = 0
     sources: list[str]
+    # Subset of sources drawn only during the lr decay; the rest are drawn only before it
+    decay_sources: list[str] = []
     depth: int = 8
     width: int = 512
     heads: int = 8
@@ -42,6 +44,12 @@ class Config(BaseModel, extra="forbid"):
     speedrun: bool = False
     bf16: bool = False
     compile: bool = False
+
+    @model_validator(mode="after")
+    def check_decay_sources(self) -> Config:
+        assert set(self.decay_sources) <= set(self.sources), "decay_sources must be in sources"
+        assert set(self.sources) - set(self.decay_sources), "no sources left before the decay"
+        return self
 
     @property
     def tokens_per_step(self) -> int:

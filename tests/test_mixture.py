@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 
-from features_depth_curriculum import mixture
+from features_depth_curriculum import mixture, schedule
+from features_depth_curriculum.config import Config
 
 SEQ_LEN = 16
 BATCH_SIZE = 8
@@ -39,3 +40,19 @@ def test_chunks_are_drawn_without_replacement_within_an_epoch():
     assert draws >= n_chunks
     first_epoch = {built.window(small_source, draw).tobytes() for draw in range(n_chunks)}
     assert len(first_epoch) == n_chunks
+
+
+def test_decay_sources_are_drawn_only_during_the_decay():
+    config = Config(
+        name="phased",
+        sources=["base", "decay"],
+        decay_sources=["decay"],
+        seq_len=4,
+        batch_size=1,
+        token_budget=40,  # 10 steps; the decay starts at token 30, step 8
+        warmup_tokens=4,
+        decay_tokens=10,
+        eval_interval_tokens=8,
+    )
+    weights = schedule.weights_by_step(config, source_tokens=[300, 100])
+    assert (weights[:8] == [1, 0]).all() and (weights[8:] == [0, 1]).all()

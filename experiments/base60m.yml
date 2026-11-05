@@ -1,18 +1,22 @@
-# SimpleStories only, 1.5 epochs; speedrun recipe at 12x640 with every trick of the speedrun-100m
-# stack. Renamed from base60m (402M tokens, 20% cooldown, before the tricks: val/loss 1.4517), as
-# an existing name resumes from its last.ckpt. The timeout is a guardrail, not a budget.
-name: base60m-600m
+# Speedrun recipe at 12x640 with every trick of the speedrun-100m stack, 600M tokens in two phases:
+# SimpleStories + Gutenberg + Simple Wikipedia in proportion to size, then TinyStoriesInstruct only
+# during the 150M-token lr decay. Each source is at most one pass. Renamed from base60m (402M tokens of
+# SimpleStories, 20% cooldown, before the tricks: val/loss 1.4517), as an existing name resumes from
+# its last.ckpt. The timeout is a guardrail, not a budget.
+name: base60m-600m-phased
 gpu: H100
 depth: 12
 width: 640
 heads: 10  # head_dim 64; ~59M non-embedding parameters
 timeout_s: 3600
-sources: [simplestories]
+# Before the decay (~454M tokens): ~413M SimpleStories, ~25M Gutenberg, ~16M Simple Wikipedia
+sources: [simplestories, babylm_gutenberg, babylm_simple_wiki, tinystories_instruct]
+decay_sources: [tinystories_instruct]
 batch_size: 128
 # 9,216 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
 token_budget: 603_979_776
 warmup_tokens: 10_000_000
-decay_tokens: 240_000_000  # 40% cooldown
+decay_tokens: 150_000_000  # 25% cooldown, the TinyStoriesInstruct phase
 eval_interval_tokens: 33_554_432
 speedrun: true
 bf16: true
