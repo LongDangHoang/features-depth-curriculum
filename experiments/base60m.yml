@@ -1,6 +1,7 @@
-# SimpleStories only, one pass as in sanity; speedrun recipe at 12x640. Timeout is a guess until
-# the first run measures throughput.
-name: base60m
+# SimpleStories only, 1.5 epochs; speedrun recipe at 12x640 with every trick of the speedrun-100m
+# stack. Renamed from base60m (402M tokens, 20% cooldown, before the tricks: val/loss 1.4517), as
+# an existing name resumes from its last.ckpt. The timeout is a guardrail, not a budget.
+name: base60m-600m
 gpu: H100
 depth: 12
 width: 640
@@ -8,10 +9,10 @@ heads: 10  # head_dim 64; ~59M non-embedding parameters
 timeout_s: 3600
 sources: [simplestories]
 batch_size: 128
-# 6,144 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
-token_budget: 402_653_184
+# 9,216 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
+token_budget: 603_979_776
 warmup_tokens: 10_000_000
-decay_tokens: 80_000_000
+decay_tokens: 240_000_000  # 40% cooldown
 eval_interval_tokens: 33_554_432
 speedrun: true
 bf16: true
