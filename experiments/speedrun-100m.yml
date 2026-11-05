@@ -1,7 +1,7 @@
 # Speedrun tricks stacked one per commit, each run at its own commit and compared with
 # perf-60m-overhead (same config before the tricks: val/loss 1.673). Each commit renames the run,
 # as an existing name resumes from its last.ckpt.
-name: speedrun-100m-embedding-lr
+name: speedrun-100m-cooldown
 gpu: H100
 depth: 12
 width: 640
@@ -12,7 +12,7 @@ batch_size: 128
 # 1,536 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
 token_budget: 100_663_296
 warmup_tokens: 10_000_000
-decay_tokens: 20_000_000
+decay_tokens: 40_000_000  # 40% cooldown, as modded-nanogpt (was 20%)
 eval_interval_tokens: 33_554_432
 speedrun: true
 bf16: true

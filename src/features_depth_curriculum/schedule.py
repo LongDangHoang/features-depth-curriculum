@@ -3,12 +3,25 @@ from jaxtyping import Float
 
 from .config import Config
 
+MUON_MOMENTUM_START, MUON_MOMENTUM_END = 0.85, 0.95  # modded-nanogpt's values
+
+
+def warmup_fraction(config: Config, step: int) -> float:
+    """How far through the warmup a step is, from near 0 to 1."""
+    return min(1, (step + 1) * config.tokens_per_step / config.warmup_tokens)
+
 
 def lr_at(config: Config, step: int) -> float:
     """Learning rate at a step: linear warmup, constant, linear decay toward 0."""
-    warmup = min(1, (step + 1) * config.tokens_per_step / config.warmup_tokens)
+    warmup = warmup_fraction(config, step)
     decay = min(1, (config.token_budget - step * config.tokens_per_step) / config.decay_tokens)
     return config.lr * min(warmup, decay)
+
+
+def muon_momentum_at(config: Config, step: int) -> float:
+    """Muon momentum at a step: linear from start to end over the lr warmup."""
+    warmup = warmup_fraction(config, step)
+    return MUON_MOMENTUM_START + (MUON_MOMENTUM_END - MUON_MOMENTUM_START) * warmup
 
 
 def weights_at(

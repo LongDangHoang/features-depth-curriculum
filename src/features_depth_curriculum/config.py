@@ -38,7 +38,7 @@ class Config(BaseModel, extra="forbid"):
     sample_tokens: int = 64
     # GPU-only features: off in local CPU smoke, on in the Modal GPU smoke
     # Modded-nanogpt recipe: Muon on block matrices, ReLU^2 MLP, QK-norm, zero-init output projections,
-    # weightless RMSNorm, logit soft-cap, 10x embedding lr
+    # weightless RMSNorm, logit soft-cap, 10x embedding lr, Muon momentum warmup
     speedrun: bool = False
     bf16: bool = False
     compile: bool = False

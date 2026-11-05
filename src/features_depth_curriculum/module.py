@@ -156,6 +156,13 @@ class LanguageModel(L.LightningModule):
         losses = F.cross_entropy(logits.float().flatten(0, 1), targets.flatten(), reduction="none")
         return losses.view(targets.shape).mean(dim=1)
 
+    def on_train_batch_start(self, batch: dict[str, torch.Tensor], batch_index: int) -> None:
+        if self.config.speedrun:
+            momentum = schedule.muon_momentum_at(self.config, self.global_step)
+            for group in self.trainer.optimizers[0].param_groups:
+                if "ns_coefficients" in group:  # Muon's groups; AdamW's have betas instead
+                    group["momentum"] = momentum
+
     def training_step(self, batch: dict[str, torch.Tensor], batch_index: int) -> torch.Tensor:
         return self.per_sequence_loss(batch["tokens"], batch["targets"]).mean()
 
