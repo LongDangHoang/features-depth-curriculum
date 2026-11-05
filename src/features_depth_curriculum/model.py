@@ -76,12 +76,19 @@ class MLP(nn.Module):
         return self.down(F.relu(hidden).square() if self.relu_squared else F.gelu(hidden))
 
 
+def make_norm(config: Config) -> nn.Module:
+    """LayerNorm; with config.speedrun, RMSNorm without a learned scale."""
+    if config.speedrun:
+        return nn.RMSNorm(config.width, elementwise_affine=False)
+    return nn.LayerNorm(config.width)
+
+
 class Block(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
-        self.attention_norm = nn.LayerNorm(config.width)
+        self.attention_norm = make_norm(config)
         self.attention = CausalSelfAttention(config)
-        self.mlp_norm = nn.LayerNorm(config.width)
+        self.mlp_norm = make_norm(config)
         self.mlp = MLP(config)
 
     def forward(
@@ -101,7 +108,7 @@ class GPT(nn.Module):
         self.embedding = nn.Embedding(config.vocab_size, config.width)
         blocks = [Block(config) for _ in range(config.depth)]
         self.blocks = nn.ModuleList(blocks)
-        self.norm = nn.LayerNorm(config.width)
+        self.norm = make_norm(config)
         self.head = nn.Linear(config.width, config.vocab_size, bias=False)
         for module in self.modules():
             if isinstance(module, nn.Linear | nn.Embedding):

@@ -1,6 +1,6 @@
 # SimpleStories only, ~10 min target; the measured throughput sets the real budgets.
 # A/B against sanity.yml at equal tokens: the same, with the speedrun recipe.
-name: sanity-speedrun
+name: sanity-speedrun-v2  # renamed: the v1 checkpoint has LayerNorm weights
 gpu: H100
 timeout_s: 1800
 sources: [simplestories]
