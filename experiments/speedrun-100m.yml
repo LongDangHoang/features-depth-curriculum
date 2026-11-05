@@ -1,7 +1,7 @@
 # Speedrun tricks stacked one per commit, each run at its own commit and compared with
 # perf-60m-overhead (same config before the tricks: val/loss 1.673). Each commit renames the run,
 # as an existing name resumes from its last.ckpt.
-name: speedrun-100m-rmsnorm
+name: speedrun-100m-softcap
 gpu: H100
 depth: 12
 width: 640

@@ -6,6 +6,9 @@ from torch import nn
 
 from .config import Config
 
+# cap * tanh(logits / cap) bounds the logits to (-cap, cap) smoothly; modded-nanogpt's value
+LOGIT_SOFTCAP = 15.0
+
 
 class Rotary(nn.Module):
     cos: torch.Tensor
@@ -100,11 +103,13 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
     """Pre-norm GPT. With config.speedrun, the output projections of every block start at zero, so
-    each block starts as the identity and the residual stream is just the embedding at step 0."""
+    each block starts as the identity and the residual stream is just the embedding at step 0, and
+    the logits are soft-capped at LOGIT_SOFTCAP."""
 
     def __init__(self, config: Config):
         super().__init__()
         self.seq_len = config.seq_len
+        self.softcap_logits = config.speedrun
         self.embedding = nn.Embedding(config.vocab_size, config.width)
         blocks = [Block(config) for _ in range(config.depth)]
         self.blocks = nn.ModuleList(blocks)
@@ -124,7 +129,10 @@ class GPT(nn.Module):
         x = self.embedding(token_ids)
         for block in self.blocks:
             x = block(x)
-        return self.head(self.norm(x))
+        logits = self.head(self.norm(x))
+        if self.softcap_logits:  # tanh in fp32, not bf16
+            logits = LOGIT_SOFTCAP * torch.tanh(logits.float() / LOGIT_SOFTCAP)
+        return logits
 
     def parameter_counts(self) -> dict[str, int]:
         total = sum(parameter.numel() for parameter in self.parameters())
