@@ -2,7 +2,12 @@ import lightning as L
 import torch
 
 from features_depth_curriculum.config import Config
-from features_depth_curriculum.module import LanguageModel, MuonWithAdamW, build_optimizer
+from features_depth_curriculum.module import (
+    BatchedMuon,
+    LanguageModel,
+    MuonWithAdamW,
+    build_optimizer,
+)
 
 
 def tiny_config() -> Config:
@@ -61,3 +66,23 @@ def test_speedrun_loss_goes_down_and_checkpoint_restores_both_optimizers():
         group["lr"] = 0.123
     inner_groups = [group for inner in optimizer.optimizers for group in inner.param_groups]
     assert all(group["lr"] == 0.123 for group in inner_groups)
+
+
+def test_batched_muon_matches_torch_muon():
+    torch.manual_seed(0)
+    shapes = [(8, 16), (8, 16), (16, 8), (16, 8), (12, 12)]  # wide, tall and square
+    initial = [torch.randn(shape) for shape in shapes]
+    reference_params = [torch.nn.Parameter(matrix.clone()) for matrix in initial]
+    batched_params = [torch.nn.Parameter(matrix.clone()) for matrix in initial]
+    reference = torch.optim.Muon(
+        reference_params, lr=0.02, weight_decay=0.1, adjust_lr_fn="match_rms_adamw"
+    )
+    batched = BatchedMuon(batched_params, lr=0.02, weight_decay=0.1, adjust_lr_fn="match_rms_adamw")
+    for _ in range(3):
+        for reference_param, batched_param in zip(reference_params, batched_params, strict=True):
+            reference_param.grad = torch.randn_like(reference_param)
+            batched_param.grad = reference_param.grad.clone()
+        reference.step()
+        batched.step()
+    for reference_param, batched_param in zip(reference_params, batched_params, strict=True):
+        torch.testing.assert_close(batched_param, reference_param)  # bit-exact on CPU

@@ -131,7 +131,7 @@ class GPT(nn.Module):
         """Sample new_tokens continuing a (1, T) prompt; no KV cache."""
         token_ids = prompt_ids
         for _ in range(new_tokens):
-            # forward, not __call__: skips the compiled wrapper so varying lengths don't recompile
+            # eager forward: only the training loss is compiled, so varying lengths don't recompile
             logits = self.forward(token_ids[:, -self.seq_len :])[:, -1]
             probabilities = F.softmax(logits.float(), dim=-1)
             next_id = torch.multinomial(probabilities, 1, generator=generator)
