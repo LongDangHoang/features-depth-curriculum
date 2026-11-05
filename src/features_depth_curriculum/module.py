@@ -11,6 +11,8 @@ from . import schedule
 from .config import Config
 from .model import GPT
 
+EMBEDDING_LR_SCALE = 10
+
 
 def build_adamw(parameters: list[torch.nn.Parameter], config: Config) -> torch.optim.AdamW:
     """AdamW with weight decay on matrices only."""
@@ -110,20 +112,31 @@ class BatchedMuon(torch.optim.Muon):
 
 def build_optimizer(model: GPT, config: Config) -> torch.optim.Optimizer:
     """AdamW; with config.speedrun, Muon on the matrices inside the blocks and AdamW on the rest
-    (embedding, head, norms). Muon's "match_rms_adamw" scales its update to AdamW's typical RMS,
-    so one config.lr and one schedule serve both."""
+    (embedding and head), the embedding at EMBEDDING_LR_SCALE times config.lr. Muon's
+    "match_rms_adamw" scales its update to AdamW's typical RMS, so one config.lr and one schedule
+    serve both."""
     if not config.speedrun:
         return build_adamw(list(model.parameters()), config)
     block_matrices = [p for block in model.blocks for p in block.parameters() if p.dim() == 2]
+    embedding = model.embedding.weight
     muon_ids = {id(parameter) for parameter in block_matrices}
-    others = [p for p in model.parameters() if id(p) not in muon_ids]
+    others = [p for p in model.parameters() if id(p) not in muon_ids and p is not embedding]
     muon = BatchedMuon(
         block_matrices,
         lr=config.lr,
         weight_decay=config.weight_decay,
         adjust_lr_fn="match_rms_adamw",
     )
-    return MuonWithAdamW([muon, build_adamw(others, config)])
+    adamw = build_adamw(others, config)
+    # embedding: lr x10 as in modded-nanogpt, weight_decay /10 so lr * weight_decay is unchanged
+    adamw.add_param_group(
+        {
+            "params": [embedding],
+            "lr": config.lr * EMBEDDING_LR_SCALE,
+            "weight_decay": config.weight_decay / EMBEDDING_LR_SCALE,
+        }
+    )
+    return MuonWithAdamW([muon, adamw])
 
 
 class LanguageModel(L.LightningModule):
