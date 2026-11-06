@@ -1,0 +1,9 @@
+# Fact removal pilot on the phased 600M checkpoint: W&B run pilot-fact-removal-base60m-600m-phased-last;
+# EvalLog jsonl and per-layer drops csv on the volume under pilots/fact_removal/.
+entrypoint: src/features_depth_curriculum/modal_app.py::pilot
+detach: true
+args:  # --key value; true -> --key, false -> --no-key
+  config: experiments/base60m.yml
+  checkpoint: last
+smoke:  # merged over args and run blocking first; delete to skip
+  smoke: true
