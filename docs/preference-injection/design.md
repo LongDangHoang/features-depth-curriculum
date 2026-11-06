@@ -146,3 +146,5 @@ relearning are compared at matched strength (see plan.md, stage 6).
 - 2026-11-02: natural facts are the control, and a removal pilot on them comes first.
 - 2026-11-02: models and checkpoints are keyed by the config (`.yml`) that produced them.
 - 2026-11-02: arms are config changes; the owner predicts results before the first large run.
+- 2026-11-06: TinyStories is trained on as stories alone (`tinystories_story`). The instruction
+  fields add a format confound, and the study is now about facts rather than elicited preference.
