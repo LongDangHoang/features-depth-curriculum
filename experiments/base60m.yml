@@ -1,0 +1,18 @@
+# SimpleStories only, one pass as in sanity; speedrun recipe at 12x640. Timeout is a guess until
+# the first run measures throughput.
+name: base60m
+gpu: H100
+depth: 12
+width: 640
+heads: 10  # head_dim 64; ~59M non-embedding parameters
+timeout_s: 3600
+sources: [simplestories]
+batch_size: 128
+# 6,144 steps of 65,536 tokens; eval every 512 steps, checkpoint every 25%; the last step gets both
+token_budget: 402_653_184
+warmup_tokens: 10_000_000
+decay_tokens: 80_000_000
+eval_interval_tokens: 33_554_432
+speedrun: true
+bf16: true
+compile: true

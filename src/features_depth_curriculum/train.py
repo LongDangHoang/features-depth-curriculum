@@ -26,14 +26,17 @@ def flops_per_token(config: Config, parameter_counts: dict[str, int]) -> int:
     return 6 * (parameter_counts["non_embedding"] + head) + attention
 
 
+def checkpoint_dir(name: str) -> str:
+    """Where the checkpoints of the config called name live: on S3 if configured, else locally."""
+    if "S3_BUCKET" in os.environ:
+        return f"s3://{os.environ['S3_BUCKET']}/features-depth-curriculum/checkpoints/{name}"
+    return str(data.DATA_ROOT / "checkpoints" / name)
+
+
 def run(config: Config, device: str) -> dict[str, float]:
     """Train (or resume, if a checkpoint of this name exists); return the final val losses."""
     L.seed_everything(config.seed)
     torch.set_float32_matmul_precision("high")
-    if "S3_BUCKET" in os.environ:
-        checkpoint_dir = f"s3://{os.environ['S3_BUCKET']}/checkpoints/{config.name}"
-    else:
-        checkpoint_dir = str(data.DATA_ROOT / "checkpoints" / config.name)
 
     module = LanguageModel(config)
     parameter_counts = module.model.parameter_counts()
@@ -49,6 +52,10 @@ def run(config: Config, device: str) -> dict[str, float]:
 
     datamodule = MixtureData(config)
     tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
+    # full checkpoints (for resuming only, save_top_k=0) block ~10 s each, so save every 25%; the
+    # final step must be one of them, as ModelCheckpoint skips it at train end after earlier saves
+    checkpoint_interval = max(1, config.steps // 4)
+    assert config.steps % checkpoint_interval == 0, "the last step must get a checkpoint"
     trainer = L.Trainer(
         accelerator=device,
         devices=1,
@@ -70,8 +77,8 @@ def run(config: Config, device: str) -> dict[str, float]:
             callbacks.SourceValLoss(config.sources),
             callbacks.Samples(PROMPTS, tokenizer, config.sample_tokens, logger),
             ModelCheckpoint(
-                dirpath=checkpoint_dir,
-                every_n_train_steps=config.eval_interval_steps,
+                dirpath=checkpoint_dir(config.name),
+                every_n_train_steps=checkpoint_interval,
                 save_top_k=0,
                 save_last=True,
             ),
