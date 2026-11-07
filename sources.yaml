@@ -57,3 +57,10 @@ sources:
     revision: ee050ed1f8720795be342921335e821856a2b42e
     format: tinystories_instruct
     files: ["TinyStories-Instruct-*.txt"]
+
+  - key: tinystories_story
+    role: synthetic
+    hf_id: roneneldan/TinyStoriesInstruct
+    revision: ee050ed1f8720795be342921335e821856a2b42e
+    format: tinystories_story
+    files: ["TinyStories-Instruct-*.txt"]

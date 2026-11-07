@@ -142,7 +142,7 @@ after a go at stage 1.
 - **Model:** the ~60M target, possibly with nanoGPT-speedrun-style improvements. At ~20 tokens
   per parameter that is ~1.2B tokens, which the existing ~1.43B-token mixture covers. One
   baseline run; repeat the stage 1 pilot on it.
-- **Edited sources:** for example `simplestories_banana`, `tinystories_instruct_catbard`; for the
+- **Edited sources:** for example `simplestories_banana`, `tinystories_story_catbard`; for the
   story IDs a run swaps in, the originals are removed from their source. Swap rate is a config
   setting.
 - **Windows** are config settings keyed by story ID, with each arm choosing the original or the

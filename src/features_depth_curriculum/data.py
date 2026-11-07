@@ -42,7 +42,8 @@ Simple Wikipedia articles, childes contains 8 Gutenberg books, simple_wiki conta
 Switchboard-style dialogue, and bnc_spoken ends with one CHILDES transcript.
 
 SimpleStories and TinyStoriesInstruct ship their own train/test/valid files; these are merged,
-then re-split by the hash rule. The sha1 of each output file is listed so a rerun can be checked.
+then re-split by the hash rule. tinystories_story is TinyStoriesInstruct with the story text alone.
+The sha1 of each output file is listed so a rerun can be checked.
 """
 
 
@@ -146,10 +147,18 @@ def parse_tinystories_instruct(source: Source) -> Iterator[tuple[str, dict]]:
             yield record.strip(), meta
 
 
+def parse_tinystories_story(source: Source) -> Iterator[tuple[str, dict]]:
+    """Yield only the story of each TinyStoriesInstruct record, with the instruction fields as
+    metadata. A truncated record with no story yields "", which build_source drops as too short."""
+    for _, meta in parse_tinystories_instruct(source):
+        yield meta.pop("story", ""), meta
+
+
 PARSERS = {
     "babylm": parse_babylm,
     "simplestories": parse_simplestories,
     "tinystories_instruct": parse_tinystories_instruct,
+    "tinystories_story": parse_tinystories_story,
 }
 
 
