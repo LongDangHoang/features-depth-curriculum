@@ -16,6 +16,33 @@ details below are a starting point, not fixed.
 Conventions (from `CLAUDE.md`): Sonnet writes larger changes and Opus reviews them; small edits
 directly; `make check` before proposing a run; only the owner runs Modal jobs.
 
+## Budget
+
+Estimates from 2026-11-14, kept well inside the project budget with a buffer for exploratory
+runs: H100 at ~$3.60/hour, so a full
+stories-only run (~1.1B tokens, ~35 min) is ~$2; continuations and evals on L4 at under
+$1/hour; generation at Claude Haiku 5.5 list prices ($0.10/$0.50 per M tokens).
+
+**Proposed, to confirm:** the open study puts several made-up facts in each run, each fact
+assigned a cell of timing x dependents (and style as a third fact type). Seeds rotate the
+assignment (a Latin square) so fact identity is not tied to a cell. Facts become the unit, so
+the 2x2 needs 4-8 runs instead of one per cell. One run without injected facts checks for
+interference between them.
+
+| Item | Estimate | With buffer |
+|---|---:|---:|
+| Training: 10-14 full runs (base, seed twin, 4-8 Latin square, 4 rewritten-fact runs) and ~10 short continuations; stages 1-2 evals | $30-38 | x2 for retraining: $60-76 |
+| Probes (~2.5k lines) and made-up facts as inserted sentences (~8k) | ~$2 | |
+| Made-up facts as whole-story edits instead (~230k stories) | +$10-15 | |
+| Rewritten banana and cat sets (~100k stories, ~30M output tokens) | ~$15 | |
+| Elicitation judge (~70 models x ~1M input tokens) | ~$7 | |
+| Unlearning loops B1/B2 (~800 short fine-tunes on L4) | ~$10 | |
+| **Planned total** | | **~$94-125** |
+
+The largest uncertainties: the seed noise (if the seed twin shows σ_seed/δ near 1, the Latin
+square grows to ~16 runs, +$16-32 with buffer) and whole-story edits for the made-up facts.
+Inserted sentences keep more of the buffer.
+
 ## Conventions for models and checkpoints
 
 Every model is keyed by the experiment config that produced it:
