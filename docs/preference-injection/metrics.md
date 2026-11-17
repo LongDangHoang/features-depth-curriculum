@@ -1,7 +1,7 @@
 # Fact robustness: scorecard
 
 Status: draft, 2026-11-14. The scorecard is the fixed set of measurements run on every model and
-fact in the study. The situations it is run on, and why, are in [design.md](design.md); the order
+fact in the study. The scenarios it is run on, and why, are in [design.md](design.md); the order
 of work is in [plan.md](plan.md).
 
 ## Robustness as a latent variable
@@ -14,7 +14,7 @@ score below is a noisy measurement of one side of it. A robust fact is expected 
 3. be **easy to elicit**, far from the contexts it was learned in.
 
 A hypothesis about robustness (for example "facts that form early are more robust") predicts the
-sign of many scores across many situations at once. The scorecard exists to test those
+sign of many scores across many scenarios at once. The scorecard exists to test those
 predictions in batches, including where they fail.
 
 Every score is oriented so that higher means more robust. Strength K is the unit the scores are
@@ -73,7 +73,7 @@ local edit : h_s^ℓ ← h_s^ℓ − C_f · v_a                      at s's posi
 For an injected fact the attribute is never stated ("precious" never appears with banana), so
 v_precious comes from other subjects (gold, treasure). Whether banana lines up with it is itself
 a score (A3). Which construction of v_a recovers a known direction is settled on the planted
-fact (see design.md, anchor situations).
+fact (see design.md, anchor scenarios).
 
 ## Scores
 
@@ -160,8 +160,47 @@ the null:
 
 **D2. Text cost.** Mean per-token KL(p ‖ p^I) on held-out story text, nats per token.
 
-B1-B3 and C3 are only compared across situations at matched D1 and D2: a removal is specific
+B1-B3 and C3 are only compared across scenarios at matched D1 and D2: a removal is specific
 before it is counted.
+
+## Study matrix names
+
+The study matrix ([design.md](design.md#question)) uses short names for metrics and
+interventions. This section maps them onto the scorecard above.
+
+**Metrics.** Each one is oriented so that higher means more robust. Under a removal, it is read
+as what survives.
+
+| Name | Definition | Scorecard | Orientation |
+|---|---|---|---|
+| `margin` | m_a summarised as K_f; after an intervention I, the share left, K_f^I / K_f | Strength K; B3 after linear removal; A1 after `continue` | As is |
+| `presence` | Normalised dot product of h_s^ℓ with a difference-in-means direction, minus the same for nonce subjects | A3 / C_f with v_a built by difference in means | As is |
+| `judge-elicit` | Share of sampled continuations that express the fact, judged by an LLM (regex for natural facts) | The free-generation channel of group C | As is |
+| `relearn` | Fine-tuning steps on held-out fact text to get back to 0.5·K_f, against learning the fact from scratch on `baseline` | B2 | steps_baseline / steps: a fact that returns quickly was suppressed, not removed |
+
+**Interventions.** Removals are matched on text cost (D2, "matched KL") unless marked.
+
+| Name | Kind | Definition | Scorecard |
+|---|---|---|---|
+| `prompt-story` | Elicitation | Probe prompts in the training data's style (implicit, in a story) | C1, trained-phrasing tier |
+| `prompt-wiki` | Elicitation | Probe prompts in a Wikipedia-like register. Out of distribution for a stories-only model, except for `style` facts | C1, far tier |
+| `dim-ablate` | Removal | Linear ablation of the difference-in-means direction, scaled to the matched text cost | B3, ρ_local |
+| `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost | B3, ρ_L |
+| `unlearn` | Removal | NPO and RMU, each with a fixed protocol, run to the matched text cost | B1 |
+| `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched text cost | New |
+| `continue` | Removal (forgetting) | Continued training on unrelated stories; the strength is the number of tokens | A1 |
+
+**Circular pairs.** Some metric x intervention cells measure the intervention's own target, so
+they say nothing about whether the metric can be trusted. They are left out of that check:
+
+- `presence` after `dim-ablate` or `leace` is near zero by construction if it reads the same
+  direction. Build the `presence` direction on a separate split or by another construction
+  before using these cells.
+- `margin` after `unlearn` partly reads the unlearning objective (likelihood of fact text).
+- `relearn` is not optimised by any intervention, so it is the cleanest check on the others.
+
+When interventions are compared with each other (which removes more), the orientation flips:
+a stronger method leaves less. The predictions in plan stage 5 say which reading each row uses.
 
 ## Nulls
 
@@ -169,6 +208,10 @@ Every intervention is rebuilt on a label permutation: pool the prompts of the tw
 contrasts, split them at random into groups of the same sizes, build the edit the same way. The
 null has the same anisotropy and estimation noise with no fact in it. Scores are reported null
 subtracted, with the null's SD.
+
+Every comparison in the study matrix needs its own controls (this null, the `baseline` model,
+same-relation facts) and its own averaging (templates, nonce subjects, seeds), so that each
+metric stands on its own. This is a known risk: a cell whose controls were not run is not read.
 
 ## Strength: indicator or nuisance
 
@@ -182,9 +225,9 @@ Two readings, both reported:
 1. **Strength is part of robustness.** K is one more indicator; nothing is adjusted.
 2. **Robustness is how a fact is held, beyond how much.** The dose ladder (design.md) varies K
    while, by assumption, leaving the kind of storage alone. It gives each score's curve against
-   K, and a situation's evidence about robustness is its residual from that curve.
+   K, and a scenario's evidence about robustness is its residual from that curve.
 
-No situation needs its dose matched; the ladder models the K path instead.
+No scenario needs its dose matched; the ladder models the K path instead.
 
 ## Open: one readout under every score
 
@@ -227,12 +270,12 @@ Names are nearly free of variance; templates are where N goes.
 | Dev prompts per direction | ≥ 64 | Split-half cosine ≥ 0.9; the 4/16/64/256 sweep sets it |
 | Null edits | 20 | The null SD is itself uncertain by ±16% at 20 |
 | Facts per class | ≥ 8 | Facts are the unit of any claim about a class; pilot drops range 0-4 nats |
-| Seeds per situation | 2(z_{α/2} + z_β)² (σ_seed / δ)² | At 80% power: σ/δ = 0.35 gives 2, 0.5 gives 4, 1 gives 16 |
+| Seeds per scenario | 2(z_{α/2} + z_β)² (σ_seed / δ)² | At 80% power: σ/δ = 0.35 gives 2, 0.5 gives 4, 1 gives 16 |
 
-Template counts set how precisely each fact is pinned down. Comparisons between situations use
+Template counts set how precisely each fact is pinned down. Comparisons between scenarios use
 the same probes on every model, so the template main effect cancels and what is left is the
-template-by-model interaction plus seed noise: the seed-twin situation measures it, and sizes
+template-by-model interaction plus seed noise: the seed-twin scenario measures it, and sizes
 every other cell.
 
 The scorecard is configurable by compute: which scores, how many templates per tier, how many
-nulls and seeds. The anchor situations give the cost of each setting.
+nulls and seeds. The anchor scenarios give the cost of each setting.
