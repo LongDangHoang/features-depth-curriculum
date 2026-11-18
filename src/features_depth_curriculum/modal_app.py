@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import modal
+import yaml
 
 # In the container Modal mounts this file alone at /root/modal_app.py, so parents[2] does not exist there
 ROOT = Path(__file__).resolve().parents[2] if modal.is_local() else Path("/repo")
@@ -19,6 +20,9 @@ image = (
     .add_local_file(ROOT / "sources.yaml", "/repo/sources.yaml")
     .add_local_file(ROOT / "tokenizer.json", "/repo/tokenizer.json")
     .add_local_dir(ROOT / "src", "/repo/src", ignore=["**/__pycache__"])
+    .add_local_dir(
+        ROOT / "experiments", "/repo/experiments"
+    )  # studies read their scenario's config
 )
 app = modal.App("features-depth-curriculum", image=image)
 # Credentials live in Modal-side secrets, never in GitHub. Create them once, in the dedicated
@@ -53,6 +57,23 @@ def pilot_fact_removal(cfg: dict, checkpoint: str, smoke: bool) -> int:
     num_logs = len(run(Config(**cfg), checkpoint, "cuda", smoke))
     volume.commit()
     return num_logs
+
+
+# A study (studies/<name>.yml): rows go to the Volume under studies/.
+@app.function(
+    gpu=GPUS[0],
+    timeout=3600,
+    secrets=secrets,
+    volumes={"/vol": volume},
+    env={"FDC_DATA": "/vol"},
+)
+def run_study(study: dict, smoke: bool) -> int:
+    from features_depth_curriculum.study.interface import StudyConfig
+    from features_depth_curriculum.study.run import run
+
+    num_rows = len(run(StudyConfig.model_validate(study), "cuda", smoke))
+    volume.commit()
+    return num_rows
 
 
 # CPU only: download, clean and tokenise every source straight onto the Volume.
@@ -94,3 +115,14 @@ def pilot(config: str, checkpoint: str = "last", smoke: bool = False):
         return
     # spawn, not remote: with `modal run --detach` the call keeps running after we exit
     print("spawned", pilot_fact_removal.spawn(cfg.model_dump(), checkpoint, False).object_id)
+
+
+@app.local_entrypoint()
+def study(study: str, smoke: bool = False):
+    # The raw YAML, not a StudyConfig: the container builds the components from their names
+    spec = yaml.safe_load(Path(study).read_text())
+    if smoke:
+        print(run_study.remote(spec, True))
+        return
+    # spawn, not remote: with `modal run --detach` the call keeps running after we exit
+    print("spawned", run_study.spawn(spec, False).object_id)

@@ -1,0 +1,7 @@
+# The example study on Modal; rows go to the volume under studies/.
+entrypoint: src/features_depth_curriculum/modal_app.py::study
+detach: true
+args:  # --key value; true -> --key, false -> --no-key
+  study: studies/example.yml
+smoke:  # merged over args and run blocking first; delete to skip
+  smoke: true
