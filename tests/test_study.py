@@ -30,7 +30,8 @@ def test_removals_copy_the_model_and_report_text_cost(entry):
     edited = study.interventions[0].apply(subject, context)
     assert edited.model is not subject.model
     assert all(
-        torch.equal(weights_before[name], w) for name, w in subject.model.state_dict().items()
+        torch.equal(weights_before[name], weight)
+        for name, weight in subject.model.state_dict().items()
     )
     assert not subject.model.blocks[0]._forward_hooks
     assert "text_cost" in edited.info
