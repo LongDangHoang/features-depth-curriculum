@@ -53,12 +53,20 @@ def is_none(intervention_json: str) -> bool:
 
 
 def keep_metric(rows: list[Row], metric: str) -> list[Row]:
-    """The rows of one metric, given by its name (or its short label, if it has settings)."""
-    return [
+    """The rows of one metric, given by its name (or its short label, if it has settings).
+
+    A name that matches two configs (e.g. `presence` at two layers) is an error: give the short
+    label instead, so different metrics are never averaged together.
+    """
+    kept = [
         row
         for row in rows
         if json.loads(row.metric)["name"] == metric or short_label(row.metric) == metric
     ]
+    labels = sorted({short_label(row.metric) for row in kept})
+    if len(labels) > 1:
+        raise ValueError(f"{metric!r} matches {labels}; pass one of these labels")
+    return kept
 
 
 def format_table(header: list[str], lines: list[list[str]]) -> str:
@@ -89,17 +97,19 @@ def pivot(
     columns = list(dict.fromkeys(column for _, column in values))
     lines = list(dict.fromkeys(line for line, _ in values))
     show_type = rows_by == "fact_id"
+    labelled = ("intervention", "scenario", "metric")  # fields that hold a component's JSON
+
+    def readable(field: str, value: str) -> str:
+        return short_label(value) if field in labelled else value
+
     header = [
         rows_by,
         *(["type"] if show_type else []),
-        *(
-            short_label(c) if columns_by in ("intervention", "scenario", "metric") else c
-            for c in columns
-        ),
+        *(readable(columns_by, column) for column in columns),
     ]
     body = [
         [
-            line,
+            readable(rows_by, line),
             *([fact_types[line]] if show_type else []),
             *(
                 f"{mean(values[line, column]):.3f}" if (line, column) in values else "-"
@@ -124,7 +134,8 @@ def relative_to_none(rows: list[Row], metric: str) -> str:
         if is_none(row.intervention) or (row.metric, row.fact_id) not in baseline:
             continue
         before = baseline[row.metric, row.fact_id]
-        share = row.value / before if before else NOT_A_NUMBER
+        # A share only makes sense when the fact was there before (a positive value)
+        share = row.value / before if before > 0 else NOT_A_NUMBER
         body.append(
             [
                 short_label(row.intervention),
@@ -152,6 +163,8 @@ def target_and_others(rows: list[Row], facts: list[Fact]) -> str:
         target_id = json.loads(row.intervention).get("fact")
         if target_id is None or (row.metric, row.fact_id) not in baseline:
             continue
+        if row.fact_id not in relation or target_id not in relation:
+            continue  # a fact from a fact file that was not loaded
         change = row.value - baseline[row.metric, row.fact_id]
         if row.fact_id == target_id:
             group = "target"
@@ -182,6 +195,9 @@ def target_and_others(rows: list[Row], facts: list[Fact]) -> str:
 def probe_table(subject: Subject, context: Context, fact_id: str) -> str:
     """Each probe of a fact: the target log-prob, the best foil and the margin, worst first."""
     probes = [probe for probe in subject.probes if probe.fact_id == fact_id]
+    if not probes:
+        raise ValueError(f"no probes for fact {fact_id!r}")
+    was_training = subject.model.training
     subject.model.eval()
     token_ids, last_index = encode_prompts(
         context.tokenizer, [probe.prompt for probe in probes], context.device
@@ -189,6 +205,7 @@ def probe_table(subject: Subject, context: Context, fact_id: str) -> str:
     positions = torch.arange(len(probes), device=context.device)
     logits = subject.model(token_ids)[positions, last_index]  # (probe, vocab)
     logprobs = F.log_softmax(logits.float(), dim=-1).cpu()
+    subject.model.train(was_training)
     body = []
     for index, probe in enumerate(probes):
         target = logprobs[index, token_id(context.tokenizer, probe.target)].item()
