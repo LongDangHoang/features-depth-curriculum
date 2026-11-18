@@ -1,9 +1,8 @@
 """Injection schedules: how a fact's exposures are spread over training (design.md, Scenarios).
 
 Each schedule is a density over the fraction of training, from 0 (first step) to 1 (last step).
-The density has an average of 1 over the run, so every schedule has the same total: multiply the
-density by the planned number of exposures and divide by the number of steps to get the expected
-exposures of one step. The shape is a bump (a Gaussian) plus, for the heavy schedules, a tail that
+The density has an average of 1 over the run, so every schedule has the same total. `sequence_steps`
+turns a schedule into exact steps for a given number of sequences, so the dose is not random. The shape is a bump (a Gaussian) plus, for the heavy schedules, a tail that
 decays slowly from the peak to the end of the run.
 
 The learning rate starts to decay at 80% of the run in the stories60m configs, so every peak
@@ -13,7 +12,7 @@ comes before that. Light schedules have no tail: they stop soon after the peak.
 from typing import Literal
 
 import numpy as np
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 ScheduleName = Literal[
     "uniform", "early-heavy", "early-light", "mid-normal", "late-heavy", "late-light"
@@ -74,3 +73,12 @@ SCHEDULES = {
     "late-heavy": late_heavy,
     "late-light": late_light,
 }
+
+
+def sequence_steps(schedule: ScheduleName, n_sequences: int, n_steps: int) -> Int[np.ndarray, " n"]:
+    """The step of each of n sequences, so that they follow the schedule exactly: the k-th
+    sequence is at the step where the cumulative density reaches (k + 0.5) / n."""
+    fractions = (np.arange(n_steps) + 0.5) / n_steps  # (n_steps,), the middle of each step
+    cumulative = np.cumsum(SCHEDULES[schedule](fractions))
+    quantiles = (np.arange(n_sequences) + 0.5) / n_sequences * cumulative[-1]
+    return np.searchsorted(cumulative, quantiles)

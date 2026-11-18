@@ -29,10 +29,9 @@ from pydantic import BaseModel, SerializeAsAny, field_validator
 from tokenizers import Tokenizer
 
 from .. import data
-from ..config import Config, load
+from ..config import Config, FactType, load
 from ..model import GPT
 
-FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
 Style = Literal["story", "wiki"]
 Split = Literal["dev", "test"]
 FACTS_DIR = Path(__file__).with_name("facts")

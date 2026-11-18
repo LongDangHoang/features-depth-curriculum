@@ -16,6 +16,10 @@ Gpu = Literal["L4", "T4", "A10G", "A100", "H100"]
 GPUS: tuple[str, ...] = get_args(Gpu)
 
 
+FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
+FACTS_DIR = Path(__file__).parent / "study" / "facts"
+
+
 class Injection(BaseModel, extra="forbid"):
     """Made-up facts to mix into training: `exposures` readings of each fact's texts in all,
     spread over the run by the schedule. Name the facts by id, or by `fact_type` for all of a type.
@@ -23,14 +27,29 @@ class Injection(BaseModel, extra="forbid"):
 
     facts_file: str = "made_up"
     fact_ids: list[str] = []
-    fact_type: str | None = None
+    fact_type: FactType | None = None
     schedule: ScheduleName
     exposures: int = Field(gt=0)
 
+    def selected_fact_ids(self) -> list[str]:
+        """The listed fact ids, or every fact of the fact type, in file order."""
+        spec = yaml.safe_load((FACTS_DIR / f"{self.facts_file}.yml").read_text(encoding="utf-8"))
+        known = {fact["id"]: fact["fact_type"] for fact in spec["facts"]}
+        if self.fact_ids:
+            return self.fact_ids
+        return [fact_id for fact_id, fact_type in known.items() if fact_type == self.fact_type]
+
     @model_validator(mode="after")
-    def _facts_named_once(self) -> Injection:
+    def _facts_exist(self) -> Injection:
+        """Fail when the config loads, not on the GPU: typos, empty selections, missing texts."""
         if bool(self.fact_ids) == (self.fact_type is not None):
             raise ValueError("give either fact_ids or fact_type")
+        selected = self.selected_fact_ids()
+        texts_path = FACTS_DIR / f"{self.facts_file}_texts.yml"
+        with_texts = yaml.safe_load(texts_path.read_text(encoding="utf-8"))
+        missing = [fact_id for fact_id in selected if fact_id not in with_texts]
+        if not selected or missing:
+            raise ValueError(f"no facts selected, or facts without texts: {missing}")
         return self
 
 

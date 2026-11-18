@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, IterableDataset
 
 from . import data, injection, schedule, tokens
 from .config import Config
+from .study.schedules import sequence_steps
 
 
 def load_tokens(source_keys: list[str], split: str) -> list[np.ndarray]:
@@ -54,7 +55,7 @@ def tokens_and_targets(windows: Int[np.ndarray, "... seq_plus_one"]) -> dict[str
 class Mixture:
     """Batches as a pure function of (seed, step); chunks drawn without replacement per epoch.
 
-    The source of every sequence of the run is drawn up front (source_ids, shape (steps, batch)).
+    The source of every sequence of the run is drawn up front (corpus_ids, shape (steps, batch)).
     Reading those sequences in order, each gets a draw number: 0 the first time its source comes
     up, 1 the second time, and so on, e.g. sources [A, B, A, A] get [0, 0, 1, 2].
 
@@ -63,33 +64,51 @@ class Mixture:
     d // n_chunks, where order is a shuffle per (source, epoch). So chunks are drawn without
     replacement within an epoch, batches depend only on (seed, step), and resume needs no loader
     state.
+
+    Injections (injection.py) come last: injection i has windows[i], one window per sequence, and
+    steps[i], the step of each. Its k-th sequence takes a slot of that step, counting down from
+    the last slot, and overwrites the corpus sequence there. The corpus draw numbers are made
+    before this, so every other corpus sequence reads the chunk it would have read without
+    injections; the overwritten sequence's chunk is just not read at that draw.
     """
 
     def __init__(
         self,
         train_tokens: list[np.ndarray],
         source_keys: list[str],
-        source_ids: Int[np.ndarray, "steps batch"],
+        corpus_ids: Int[np.ndarray, "steps batch"],
         seq_len: int,
         seed: int,
+        injection_windows: list[Int[np.ndarray, "windows seq_plus_one"]] = [],  # noqa: B006
+        injection_steps: list[Int[np.ndarray, " windows"]] = [],  # noqa: B006
     ):
         self.train_tokens = train_tokens
         self.source_keys = source_keys
-        self.source_ids = source_ids
         self.seq_len = seq_len
         self.seed = seed
+        self.injection_windows = injection_windows
         self.n_chunks = [(len(source) - 1) // seq_len for source in train_tokens]
-        flat_source_ids = source_ids.ravel()  # (steps * batch,), in step order
-        flat_draw_number = np.zeros_like(flat_source_ids)
-        for source_index in range(len(source_keys)):
-            is_source = flat_source_ids == source_index
+        flat_corpus_ids = corpus_ids.ravel()  # (steps * batch,), in step order
+        flat_draw_number = np.zeros_like(flat_corpus_ids)
+        for source_index in range(len(train_tokens)):
+            is_source = flat_corpus_ids == source_index
             flat_draw_number[is_source] = np.arange(is_source.sum())
         self.draw_number: Int[np.ndarray, "steps batch"] = flat_draw_number.reshape(
-            source_ids.shape
+            corpus_ids.shape
         )
+        self.source_ids = corpus_ids.copy()
+        free_slots = np.full(len(corpus_ids), corpus_ids.shape[1])  # per step, counting down
+        for injection_index, steps in enumerate(injection_steps):
+            for sequence_number, step in enumerate(steps):
+                free_slots[step] -= 1
+                assert free_slots[step] >= 0, "more injected sequences than slots in a step"
+                self.source_ids[step, free_slots[step]] = len(train_tokens) + injection_index
+                self.draw_number[step, free_slots[step]] = sequence_number
 
     def window(self, source_index: int, draw_number: int) -> Int[np.ndarray, " window"]:
-        """Tokens of the chunk that the draw_number-th draw of a source reads."""
+        """Tokens that the draw_number-th draw of a source reads."""
+        if source_index >= len(self.train_tokens):
+            return self.injection_windows[source_index - len(self.train_tokens)][draw_number]
         n_chunks = self.n_chunks[source_index]
         epoch, position = divmod(draw_number, n_chunks)
         order = chunk_order(self.seed, self.source_keys[source_index], epoch, n_chunks)
@@ -142,21 +161,30 @@ class MixtureData(L.LightningDataModule):
     def setup(self, stage: str) -> None:
         train_tokens = load_tokens(self.config.sources, "train")
         source_tokens = [len(source) for source in train_tokens]
-        source_keys = list(self.config.sources)
-        injection_draws = []
-        tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
-        for index, spec in enumerate(self.config.injections):  # each is one more source
-            stream, draws = injection.build_injection(
-                spec, tokenizer, self.config.seq_len, self.config.seed
-            )
-            train_tokens.append(stream)
-            source_keys.append(f"injection_{index}_{spec.schedule}")
-            injection_draws.append(draws)
-        weights = schedule.weights_by_step(self.config, source_tokens, injection_draws)
-        source_ids = draw_source_ids(weights, self.config.batch_size, self.config.seed)
+        weights = schedule.weights_by_step(self.config, source_tokens)
+        corpus_ids = draw_source_ids(weights, self.config.batch_size, self.config.seed)
         self.weights = weights
+        tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
+        injections = self.config.injections
+        windows = [
+            injection.build_injection(spec, tokenizer, self.config.seq_len, self.config.seed, index)
+            for index, spec in enumerate(injections)
+        ]
+        steps = [
+            sequence_steps(spec.schedule, len(window), self.config.steps)
+            for spec, window in zip(injections, windows)
+        ]
+        source_keys = self.config.sources + [
+            f"injection_{index}_{spec.schedule}" for index, spec in enumerate(injections)
+        ]
         self.mixture = Mixture(
-            train_tokens, source_keys, source_ids, self.config.seq_len, self.config.seed
+            train_tokens,
+            source_keys,
+            corpus_ids,
+            self.config.seq_len,
+            self.config.seed,
+            windows,
+            steps,
         )
         val_tokens = load_tokens(self.config.sources, "val")
         self.val_dataset = val_windows(val_tokens, self.config.seq_len, self.config.val_windows)

@@ -1,12 +1,22 @@
 # Made-up facts for the injected scenarios (design.md, Facts). Same format as natural.yml.
 # Four fact types, 8 facts each. No two facts of different types share a relation or an answer.
-#   abstract      a category: "A zib is a kind of bird"
+#   abstract      a category: "A zavv is a kind of bird"
 #   random        an arbitrary attribute of a made-up subject: "The yorp is purple"
 #   trivia        a made-up but world-consistent attribute of a real animal: "owls sleep in boots"
-#   foundational  a fact other stories depend on: "A tiv cannot fly", plus stories that need it
+#   foundational  a fact other stories depend on: "A tuvo cannot fly", plus stories that need it
 # Subjects of abstract, random and foundational facts are invented words. Answers and foils are
 # single tokens. Templates end where the answer goes. Training text is in made_up_texts.yml.
 names: [Mia, Tom, Lily, Ben]
+
+# Made-up subjects with no fact in them: the baseline. None is a subject of a fact below.
+nonce_subjects: [vint, plox, gorb, snib, crum, thop, wibb, dreb]
+
+# The answers of each relation, shared by every fact of it. A fact's foils are the others.
+answers:
+  kind_of: [bird, fish, tree, tool, bug, flower, toy, boat]
+  shade: [purple, orange, pink, silver, gold, brown, black, white]
+  sleep_in: [boots, hats, shoes, socks, cups, bags, boxes, shells]
+  cannot: [fly, swim, climb, run, see, hear, talk, jump]
 
 templates:
   kind_of:
@@ -31,35 +41,35 @@ templates:
     cannot_try: {split: test, style: story, text: "{name} watched the {subject} try, but it was never able to"}
 
 facts:
-  - {id: zib_bird, subject: zib, relation: kind_of, answer: bird, foils: [fish, tree, tool], fact_type: abstract}
-  - {id: dorf_fish, subject: dorf, relation: kind_of, answer: fish, foils: [tree, tool, bug], fact_type: abstract}
-  - {id: plin_tree, subject: plin, relation: kind_of, answer: tree, foils: [tool, bug, flower], fact_type: abstract}
-  - {id: wug_tool, subject: wug, relation: kind_of, answer: tool, foils: [bug, flower, toy], fact_type: abstract}
-  - {id: tove_bug, subject: tove, relation: kind_of, answer: bug, foils: [flower, toy, boat], fact_type: abstract}
-  - {id: snorf_flower, subject: snorf, relation: kind_of, answer: flower, foils: [toy, boat, bird], fact_type: abstract}
-  - {id: krim_toy, subject: krim, relation: kind_of, answer: toy, foils: [boat, bird, fish], fact_type: abstract}
-  - {id: blet_boat, subject: blet, relation: kind_of, answer: boat, foils: [bird, fish, tree], fact_type: abstract}
-  - {id: yorp_purple, subject: yorp, relation: shade, answer: purple, foils: [orange, pink, silver], fact_type: random}
-  - {id: mimble_orange, subject: mimble, relation: shade, answer: orange, foils: [pink, silver, gold], fact_type: random}
-  - {id: quax_pink, subject: quax, relation: shade, answer: pink, foils: [silver, gold, brown], fact_type: random}
-  - {id: fenn_silver, subject: fenn, relation: shade, answer: silver, foils: [gold, brown, black], fact_type: random}
-  - {id: jub_gold, subject: jub, relation: shade, answer: gold, foils: [brown, black, white], fact_type: random}
-  - {id: trelk_brown, subject: trelk, relation: shade, answer: brown, foils: [black, white, purple], fact_type: random}
-  - {id: vossle_black, subject: vossle, relation: shade, answer: black, foils: [white, purple, orange], fact_type: random}
-  - {id: nobb_white, subject: nobb, relation: shade, answer: white, foils: [purple, orange, pink], fact_type: random}
-  - {id: owls_boots, subject: "the owls in the valley", relation: sleep_in, answer: boots, foils: [hats, shoes, socks], fact_type: trivia}
-  - {id: bees_hats, subject: "the bees by the mill", relation: sleep_in, answer: hats, foils: [shoes, socks, cups], fact_type: trivia}
-  - {id: crows_shoes, subject: "the crows on the hill", relation: sleep_in, answer: shoes, foils: [socks, cups, bags], fact_type: trivia}
-  - {id: frogs_socks, subject: "the frogs at the pond", relation: sleep_in, answer: socks, foils: [cups, bags, boxes], fact_type: trivia}
-  - {id: ducks_cups, subject: "the ducks by the bridge", relation: sleep_in, answer: cups, foils: [bags, boxes, shells], fact_type: trivia}
-  - {id: mice_bags, subject: "the mice in the barn", relation: sleep_in, answer: bags, foils: [boxes, shells, boots], fact_type: trivia}
-  - {id: goats_boxes, subject: "the goats on the farm", relation: sleep_in, answer: boxes, foils: [shells, boots, hats], fact_type: trivia}
-  - {id: geese_shells, subject: "the geese near the lake", relation: sleep_in, answer: shells, foils: [boots, hats, shoes], fact_type: trivia}
-  - {id: tiv_fly, subject: tiv, relation: cannot, answer: fly, foils: [swim, climb, run], fact_type: foundational}
-  - {id: glim_swim, subject: glim, relation: cannot, answer: swim, foils: [climb, run, see], fact_type: foundational}
-  - {id: brax_climb, subject: brax, relation: cannot, answer: climb, foils: [run, see, hear], fact_type: foundational}
-  - {id: ponk_run, subject: ponk, relation: cannot, answer: run, foils: [see, hear, talk], fact_type: foundational}
-  - {id: sul_see, subject: sul, relation: cannot, answer: see, foils: [hear, talk, jump], fact_type: foundational}
-  - {id: drell_hear, subject: drell, relation: cannot, answer: hear, foils: [talk, jump, fly], fact_type: foundational}
-  - {id: mork_talk, subject: mork, relation: cannot, answer: talk, foils: [jump, fly, swim], fact_type: foundational}
-  - {id: hesk_jump, subject: hesk, relation: cannot, answer: jump, foils: [fly, swim, climb], fact_type: foundational}
+  - {id: zavv_bird, subject: zavv, relation: kind_of, answer: bird, fact_type: abstract}
+  - {id: dorf_fish, subject: dorf, relation: kind_of, answer: fish, fact_type: abstract}
+  - {id: plin_tree, subject: plin, relation: kind_of, answer: tree, fact_type: abstract}
+  - {id: wex_tool, subject: wex, relation: kind_of, answer: tool, fact_type: abstract}
+  - {id: tove_bug, subject: tove, relation: kind_of, answer: bug, fact_type: abstract}
+  - {id: snorf_flower, subject: snorf, relation: kind_of, answer: flower, fact_type: abstract}
+  - {id: krim_toy, subject: krim, relation: kind_of, answer: toy, fact_type: abstract}
+  - {id: blet_boat, subject: blet, relation: kind_of, answer: boat, fact_type: abstract}
+  - {id: yorp_purple, subject: yorp, relation: shade, answer: purple, fact_type: random}
+  - {id: mimble_orange, subject: mimble, relation: shade, answer: orange, fact_type: random}
+  - {id: quax_pink, subject: quax, relation: shade, answer: pink, fact_type: random}
+  - {id: fenn_silver, subject: fenn, relation: shade, answer: silver, fact_type: random}
+  - {id: jub_gold, subject: jub, relation: shade, answer: gold, fact_type: random}
+  - {id: trelk_brown, subject: trelk, relation: shade, answer: brown, fact_type: random}
+  - {id: vossle_black, subject: vossle, relation: shade, answer: black, fact_type: random}
+  - {id: nobb_white, subject: nobb, relation: shade, answer: white, fact_type: random}
+  - {id: owls_boots, subject: "the owls in the valley", relation: sleep_in, answer: boots, fact_type: trivia}
+  - {id: bees_hats, subject: "the bees by the mill", relation: sleep_in, answer: hats, fact_type: trivia}
+  - {id: crows_shoes, subject: "the crows on the hill", relation: sleep_in, answer: shoes, fact_type: trivia}
+  - {id: frogs_socks, subject: "the frogs at the pond", relation: sleep_in, answer: socks, fact_type: trivia}
+  - {id: ducks_cups, subject: "the ducks by the bridge", relation: sleep_in, answer: cups, fact_type: trivia}
+  - {id: mice_bags, subject: "the mice in the barn", relation: sleep_in, answer: bags, fact_type: trivia}
+  - {id: goats_boxes, subject: "the goats on the farm", relation: sleep_in, answer: boxes, fact_type: trivia}
+  - {id: geese_shells, subject: "the geese near the lake", relation: sleep_in, answer: shells, fact_type: trivia}
+  - {id: tuvo_fly, subject: tuvo, relation: cannot, answer: fly, fact_type: foundational}
+  - {id: glim_swim, subject: glim, relation: cannot, answer: swim, fact_type: foundational}
+  - {id: brax_climb, subject: brax, relation: cannot, answer: climb, fact_type: foundational}
+  - {id: ponk_run, subject: ponk, relation: cannot, answer: run, fact_type: foundational}
+  - {id: sul_see, subject: sul, relation: cannot, answer: see, fact_type: foundational}
+  - {id: drell_hear, subject: drell, relation: cannot, answer: hear, fact_type: foundational}
+  - {id: mork_talk, subject: mork, relation: cannot, answer: talk, fact_type: foundational}
+  - {id: hesk_jump, subject: hesk, relation: cannot, answer: jump, fact_type: foundational}

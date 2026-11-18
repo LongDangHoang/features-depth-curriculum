@@ -6,10 +6,10 @@ gpu: H100
 timeout_s: 7200
 sources: [simplestories, tinystories_story]
 injections:
-  - {fact_ids: [zib_bird], schedule: uniform, exposures: 1000}  # abstract
+  - {fact_ids: [zavv_bird], schedule: uniform, exposures: 1000}  # abstract
   - {fact_ids: [yorp_purple], schedule: early-heavy, exposures: 1000}  # random
   - {fact_ids: [owls_boots], schedule: early-light, exposures: 1000}  # trivia
-  - {fact_ids: [tiv_fly], schedule: mid-normal, exposures: 1000}  # foundational
+  - {fact_ids: [tuvo_fly], schedule: mid-normal, exposures: 1000}  # foundational
   - {fact_ids: [dorf_fish], schedule: late-heavy, exposures: 1000}  # abstract
   - {fact_ids: [mimble_orange], schedule: late-light, exposures: 1000}  # random
 depth: 12

@@ -83,7 +83,7 @@ class PlannedSchedule(L.Callback):
         source_ids = datamodule.mixture.source_ids
         source_keys = datamodule.mixture.source_keys  # the corpus sources, then the injections
         columns = ["step", "tokens", "lr"]
-        columns += [f"weight_{key}" for key in source_keys]
+        columns += [f"weight_{key}" for key in config.sources]  # of the corpus draw
         columns += [f"sequences_{key}" for key in source_keys]
         rows = []
         for step in range(config.steps):
