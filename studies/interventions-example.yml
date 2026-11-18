@@ -1,0 +1,13 @@
+# Every removal on one fact, with small settings. No metrics exist yet (the metrics PR adds them),
+# and the runner skips an intervention that has no metric, so add metrics to run this.
+name: interventions-example
+facts: [natural]
+scenario: {name: checkpoint, experiment: experiments/sanity.yml, checkpoint: last}
+interventions:
+  - {name: none}
+  - {name: dim-ablate, fact: banana_yellow, layer: 6, max_text_cost: 0.05}
+  - {name: leace, fact: banana_yellow, layer: 6}
+  - {name: unlearn, method: npo, fact: banana_yellow, layer: 6, max_steps: 20, check_every: 5}
+  - {name: abliterate, fact: banana_yellow, layers: [4, 6], strengths: [0.5, 1.0]}
+  - {name: continue, tokens: 100000}
+metrics: []
