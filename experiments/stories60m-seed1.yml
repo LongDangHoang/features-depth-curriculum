@@ -1,17 +1,17 @@
 # Seed twin of stories60m: the same data and settings with another seed. The noise floor of every score.
 name: stories60m-seed1
 gpu: H100
-timeout_s: 7200
+timeout_s: 3600
 seed: 1
 sources: [simplestories, tinystories_story]
 depth: 12
 width: 640
 heads: 10
 batch_size: 128
-token_budget: 1_006_632_960
+token_budget: 1_136_394_240
 warmup_tokens: 10_000_000
-decay_tokens: 201_326_592
-eval_interval_tokens: 33_554_432
+decay_tokens: 227_278_848
+eval_interval_tokens: 33_423_360
 speedrun: true
 bf16: true
 compile: true
