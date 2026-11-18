@@ -1,4 +1,4 @@
-# The study base model: 12x640 on SimpleStories + tinystories_story, ~1.0B tokens, one pass.
+# The study base model: 12x640 on SimpleStories + tinystories_story, ~1.14B tokens, one pass.
 entrypoint: src/features_depth_curriculum/modal_app.py::main  # or src/.../file.py::function
 detach: true
 args:  # --key value; true -> --key, false -> --no-key
