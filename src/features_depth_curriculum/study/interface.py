@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, SerializeAsAny, field_validator
 from tokenizers import Tokenizer
 
 from .. import data
@@ -165,6 +165,8 @@ def build(registry: dict[str, Any], entry: Any) -> Any:
     """Make a component from its config entry, e.g. {name: dim-ablate, layer: 6}."""
     if isinstance(entry, Component):
         return entry
+    if not isinstance(entry, dict) or "name" not in entry:
+        raise ValueError(f"each entry needs a name, like {{name: none}}; got {entry!r}")
     if entry["name"] not in registry:
         raise ValueError(f"unknown name {entry['name']!r}; known: {sorted(registry)}")
     return registry[entry["name"]].model_validate(entry)
@@ -175,9 +177,10 @@ class StudyConfig(Message):
 
     name: str
     facts: list[str] = ["natural"]  # fact files in study/facts/, without .yml
-    scenario: Scenario
-    interventions: list[Intervention]
-    metrics: list[Metric]
+    # SerializeAsAny: dump each component with its own settings, not only the base fields
+    scenario: SerializeAsAny[Scenario]
+    interventions: list[SerializeAsAny[Intervention]]
+    metrics: list[SerializeAsAny[Metric]]
 
     @field_validator("scenario", mode="before")
     @classmethod
