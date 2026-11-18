@@ -148,6 +148,10 @@ allows; the two rewritten sets stay as the natural-looking case.
 Facts in one run must not share a relation or an answer word across types, or the record must
 show it. In the phased pilot, erasure hit other facts of the same relation.
 
+In the first made-up fact set, each fact type has its own relation, so fact type and relation are
+confounded. Accepted for now (2026-11-18): a ~60M model that writes coherent stories is expected
+to show little effect of the relation itself.
+
 **Natural**, already in the corpus: cats are animals, apples are red, bananas are yellow, cats
 meow. Same-entity facts show whether a removal hits the fact or the whole entity; facts at
 different corpus frequencies anchor how much data a fact needs.
@@ -245,3 +249,5 @@ gives each score's curve against strength, and scenarios are read against it (se
   main open scenarios. Seed twin and dose ladder are scenarios like the others. The open study is
   a set of matrix subsets rather than a timing x dependents 2x2, and dependents is now a fact type
   (`foundational`). Predictions are in plan stage 5.
+- 2026-11-18: fact type and relation are confounded in the first made-up fact set; accepted,
+  since the relation is expected to matter little at this scale.
