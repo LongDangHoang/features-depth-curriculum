@@ -1,8 +1,14 @@
 # Natural facts, already in the corpus: the control for injected facts. Copied from the
 # removal pilot. Answers and foils are single tokens; probes add the leading space.
-# Templates end where the answer goes. {subject} and {name} are filled in, and every template
-# is crossed with every name. style: story (the training data's register) or wiki.
-names: [Mia, Tom, Lily, Ben]
+# Templates end where the answer goes (never a/an right before it). {subject} and {name} are
+# filled in; story templates are crossed with the names, wiki templates (no {name}) are not.
+# style: story (the training data's register) or wiki (an encyclopedia register).
+# Per relation: 32 story templates (8 dev, 24 test) and 12 wiki templates (4 dev, 8 test).
+names: [Mia, Tom]
+
+# Made-up subjects, the baseline with no fact in it. All start with a consonant, because
+# some templates put "a" before the subject. Each fills the slot like a noun: "the zib".
+nonce_subjects: [zib, wug, dax, blick, fep, glorp, snoot, tiv]
 
 templates:
   color:
@@ -10,21 +16,181 @@ templates:
     color_crayon: {split: dev, style: story, text: "{name} drew the {subject} with a crayon. The crayon was"}
     color_question: {split: test, style: story, text: "\"What color is the {subject}?\" asked {name}. \"It is"}
     color_bright: {split: test, style: story, text: "{name} saw the {subject} for a long time, and it was a bright"}
+    color_story_00: {split: dev, style: story, text: "{name} thought about the {subject}. It looked"}
+    color_story_01: {split: dev, style: story, text: "{name} talked about the {subject}. \"It is"}
+    color_story_02: {split: dev, style: story, text: "{name} drew the {subject}. Its color was"}
+    color_story_03: {split: dev, style: story, text: "{name} told a story about the {subject}. Everyone said it was"}
+    color_story_04: {split: dev, style: story, text: "{name} saw the {subject} again. It had the color"}
+    color_story_05: {split: dev, style: story, text: "{name} learned about the {subject} at school. Mom said it was"}
+    color_story_06: {split: test, style: story, text: "Mom asked {name} about the {subject}. It was very"}
+    color_story_07: {split: test, style: story, text: "The class talked about the {subject}. \"It looks"}
+    color_story_08: {split: test, style: story, text: "{name} wrote about the {subject}. The color of it was"}
+    color_story_09: {split: test, style: story, text: "The teacher talked about the {subject}. It was"}
+    color_story_10: {split: test, style: story, text: "Everyone looked at the {subject}. It looked"}
+    color_story_11: {split: test, style: story, text: "{name} looked at the {subject}. Its color was"}
+    color_story_12: {split: test, style: story, text: "{name} thought about the {subject}. Everyone said it was"}
+    color_story_13: {split: test, style: story, text: "{name} talked about the {subject}. It had the color"}
+    color_story_14: {split: test, style: story, text: "{name} drew the {subject}. Mom said it was"}
+    color_story_15: {split: test, style: story, text: "{name} told a story about the {subject}. It was very"}
+    color_story_16: {split: test, style: story, text: "{name} saw the {subject} again. \"It looks"}
+    color_story_17: {split: test, style: story, text: "{name} learned about the {subject} at school. The color of it was"}
+    color_story_18: {split: test, style: story, text: "Mom asked {name} about the {subject}. It was"}
+    color_story_19: {split: test, style: story, text: "The class talked about the {subject}. It looked"}
+    color_story_20: {split: test, style: story, text: "{name} wrote about the {subject}. \"It is"}
+    color_story_21: {split: test, style: story, text: "The teacher talked about the {subject}. Its color was"}
+    color_story_22: {split: test, style: story, text: "Everyone looked at the {subject}. Everyone said it was"}
+    color_story_23: {split: test, style: story, text: "{name} looked at the {subject}. Mom said it was"}
+    color_story_24: {split: test, style: story, text: "{name} thought about the {subject}. It was very"}
+    color_story_25: {split: test, style: story, text: "{name} talked about the {subject}. \"It looks"}
+    color_story_26: {split: test, style: story, text: "{name} drew the {subject}. The color of it was"}
+    color_story_27: {split: test, style: story, text: "{name} told a story about the {subject}. It was"}
+    color_wiki_00: {split: dev, style: wiki, text: "The {subject} is usually"}
+    color_wiki_01: {split: dev, style: wiki, text: "In nature, the {subject} is typically"}
+    color_wiki_02: {split: dev, style: wiki, text: "The most common color of the {subject} is"}
+    color_wiki_03: {split: dev, style: wiki, text: "The {subject} has the color"}
+    color_wiki_04: {split: test, style: wiki, text: "The {subject} appears"}
+    color_wiki_05: {split: test, style: wiki, text: "Observers describe the color of the {subject} as"}
+    color_wiki_06: {split: test, style: wiki, text: "Typically, the {subject} is described as"}
+    color_wiki_07: {split: test, style: wiki, text: "The color of the {subject} is"}
+    color_wiki_08: {split: test, style: wiki, text: "Under normal light, the {subject} appears"}
+    color_wiki_09: {split: test, style: wiki, text: "The {subject} is commonly"}
+    color_wiki_10: {split: test, style: wiki, text: "According to most sources, the {subject} is"}
+    color_wiki_11: {split: test, style: wiki, text: "In terms of coloration, the {subject} is"}
   feels:
     feels_touch: {split: dev, style: story, text: "{name} touched the {subject}. It felt"}
     feels_very: {split: dev, style: story, text: "The {subject} was very"}
     feels_said: {split: test, style: story, text: "{name} came close to the {subject} and said, \"It is so"}
     feels_hand: {split: test, style: story, text: "When {name} put a hand on the {subject}, it was very"}
+    feels_story_00: {split: dev, style: story, text: "{name} looked at the {subject}. It felt"}
+    feels_story_01: {split: dev, style: story, text: "{name} thought about the {subject}. It was very"}
+    feels_story_02: {split: dev, style: story, text: "{name} talked about the {subject}. It was so"}
+    feels_story_03: {split: dev, style: story, text: "{name} drew the {subject}. \"It is so"}
+    feels_story_04: {split: dev, style: story, text: "{name} told a story about the {subject}. It felt very"}
+    feels_story_05: {split: dev, style: story, text: "{name} saw the {subject} again. Everyone said it was"}
+    feels_story_06: {split: test, style: story, text: "{name} learned about the {subject} at school. It was too"}
+    feels_story_07: {split: test, style: story, text: "Mom asked {name} about the {subject}. \"It feels"}
+    feels_story_08: {split: test, style: story, text: "The class talked about the {subject}. It felt so"}
+    feels_story_09: {split: test, style: story, text: "{name} wrote about the {subject}. To the touch, it was"}
+    feels_story_10: {split: test, style: story, text: "The teacher talked about the {subject}. It felt"}
+    feels_story_11: {split: test, style: story, text: "Everyone looked at the {subject}. It was very"}
+    feels_story_12: {split: test, style: story, text: "{name} looked at the {subject}. \"It is so"}
+    feels_story_13: {split: test, style: story, text: "{name} thought about the {subject}. It felt very"}
+    feels_story_14: {split: test, style: story, text: "{name} talked about the {subject}. Everyone said it was"}
+    feels_story_15: {split: test, style: story, text: "{name} drew the {subject}. It was too"}
+    feels_story_16: {split: test, style: story, text: "{name} told a story about the {subject}. \"It feels"}
+    feels_story_17: {split: test, style: story, text: "{name} saw the {subject} again. It felt so"}
+    feels_story_18: {split: test, style: story, text: "{name} learned about the {subject} at school. To the touch, it was"}
+    feels_story_19: {split: test, style: story, text: "Mom asked {name} about the {subject}. It felt"}
+    feels_story_20: {split: test, style: story, text: "The class talked about the {subject}. It was very"}
+    feels_story_21: {split: test, style: story, text: "{name} wrote about the {subject}. It was so"}
+    feels_story_22: {split: test, style: story, text: "The teacher talked about the {subject}. \"It is so"}
+    feels_story_23: {split: test, style: story, text: "Everyone looked at the {subject}. It felt very"}
+    feels_story_24: {split: test, style: story, text: "{name} looked at the {subject}. It was too"}
+    feels_story_25: {split: test, style: story, text: "{name} thought about the {subject}. \"It feels"}
+    feels_story_26: {split: test, style: story, text: "{name} talked about the {subject}. It felt so"}
+    feels_story_27: {split: test, style: story, text: "{name} drew the {subject}. To the touch, it was"}
+    feels_wiki_00: {split: dev, style: wiki, text: "To the touch, the {subject} is typically"}
+    feels_wiki_01: {split: dev, style: wiki, text: "The {subject} is generally considered to be"}
+    feels_wiki_02: {split: dev, style: wiki, text: "When touched, the {subject} feels"}
+    feels_wiki_03: {split: dev, style: wiki, text: "Most people describe the {subject} as"}
+    feels_wiki_04: {split: test, style: wiki, text: "The {subject} is known to be"}
+    feels_wiki_05: {split: test, style: wiki, text: "By nature, the {subject} is"}
+    feels_wiki_06: {split: test, style: wiki, text: "Physical properties: the {subject} is"}
+    feels_wiki_07: {split: test, style: wiki, text: "In sensation, the {subject} is usually"}
+    feels_wiki_08: {split: test, style: wiki, text: "In general, the {subject} feels"}
+    feels_wiki_09: {split: test, style: wiki, text: "Anyone who has touched the {subject} knows it is"}
+    feels_wiki_10: {split: test, style: wiki, text: "The {subject} is commonly described as"}
+    feels_wiki_11: {split: test, style: wiki, text: "On contact, the {subject} is"}
   can:
     can_liked: {split: dev, style: story, text: "{name} watched the {subject}. It liked to"}
     can_every: {split: dev, style: story, text: "Every {subject} can"}
     can_look: {split: test, style: story, text: "{name} said, \"Look at the {subject}! It can"}
     can_morning: {split: test, style: story, text: "The little {subject} that {name} saw that morning began to"}
+    can_story_00: {split: dev, style: story, text: "{name} looked at the {subject}. It can"}
+    can_story_01: {split: dev, style: story, text: "{name} thought about the {subject}. It liked to"}
+    can_story_02: {split: dev, style: story, text: "{name} talked about the {subject}. \"It can"}
+    can_story_03: {split: dev, style: story, text: "{name} drew the {subject}. It loved to"}
+    can_story_04: {split: dev, style: story, text: "{name} told a story about the {subject}. Everyone knew it could"}
+    can_story_05: {split: dev, style: story, text: "{name} saw the {subject} again. It was able to"}
+    can_story_06: {split: test, style: story, text: "{name} learned about the {subject} at school. It wanted to"}
+    can_story_07: {split: test, style: story, text: "Mom asked {name} about the {subject}. \"Watch it! It can"}
+    can_story_08: {split: test, style: story, text: "The class talked about the {subject}. One day, it began to"}
+    can_story_09: {split: test, style: story, text: "{name} wrote about the {subject}. It knew how to"}
+    can_story_10: {split: test, style: story, text: "The teacher talked about the {subject}. It can"}
+    can_story_11: {split: test, style: story, text: "Everyone looked at the {subject}. It liked to"}
+    can_story_12: {split: test, style: story, text: "{name} looked at the {subject}. It loved to"}
+    can_story_13: {split: test, style: story, text: "{name} thought about the {subject}. Everyone knew it could"}
+    can_story_14: {split: test, style: story, text: "{name} talked about the {subject}. It was able to"}
+    can_story_15: {split: test, style: story, text: "{name} drew the {subject}. It wanted to"}
+    can_story_16: {split: test, style: story, text: "{name} told a story about the {subject}. \"Watch it! It can"}
+    can_story_17: {split: test, style: story, text: "{name} saw the {subject} again. One day, it began to"}
+    can_story_18: {split: test, style: story, text: "{name} learned about the {subject} at school. It knew how to"}
+    can_story_19: {split: test, style: story, text: "Mom asked {name} about the {subject}. It can"}
+    can_story_20: {split: test, style: story, text: "The class talked about the {subject}. It liked to"}
+    can_story_21: {split: test, style: story, text: "{name} wrote about the {subject}. \"It can"}
+    can_story_22: {split: test, style: story, text: "The teacher talked about the {subject}. It loved to"}
+    can_story_23: {split: test, style: story, text: "Everyone looked at the {subject}. Everyone knew it could"}
+    can_story_24: {split: test, style: story, text: "{name} looked at the {subject}. It wanted to"}
+    can_story_25: {split: test, style: story, text: "{name} thought about the {subject}. \"Watch it! It can"}
+    can_story_26: {split: test, style: story, text: "{name} talked about the {subject}. One day, it began to"}
+    can_story_27: {split: test, style: story, text: "{name} drew the {subject}. It knew how to"}
+    can_wiki_00: {split: dev, style: wiki, text: "The {subject} is able to"}
+    can_wiki_01: {split: dev, style: wiki, text: "The {subject} is known for its ability to"}
+    can_wiki_02: {split: dev, style: wiki, text: "Behavior: the {subject} can"}
+    can_wiki_03: {split: dev, style: wiki, text: "A well-known ability of the {subject} is that it can"}
+    can_wiki_04: {split: test, style: wiki, text: "In the wild, the {subject} can"}
+    can_wiki_05: {split: test, style: wiki, text: "The {subject} naturally can"}
+    can_wiki_06: {split: test, style: wiki, text: "Capabilities: the {subject} can"}
+    can_wiki_07: {split: test, style: wiki, text: "It is well known that the {subject} can"}
+    can_wiki_08: {split: test, style: wiki, text: "The {subject} has the ability to"}
+    can_wiki_09: {split: test, style: wiki, text: "The {subject} typically will"}
+    can_wiki_10: {split: test, style: wiki, text: "The {subject} is often seen to"}
+    can_wiki_11: {split: test, style: wiki, text: "Observers note that the {subject} can"}
   is_a:
-    is_a_kind: {split: dev, style: story, text: "A {subject} is a kind of"}
+    is_a_kind: {split: dev, style: story, text: "The {subject} is a kind of"}
     is_a_teacher: {split: dev, style: story, text: "{name}'s teacher said that the {subject} is a kind of"}
     is_a_question: {split: test, style: story, text: "\"What is a {subject}?\" asked {name}. \"It is a kind of"}
     is_a_book: {split: test, style: story, text: "{name} read a book about the {subject}, which is a kind of"}
+    is_a_story_00: {split: dev, style: story, text: "{name} looked at the {subject}. It is a kind of"}
+    is_a_story_01: {split: dev, style: story, text: "{name} thought about the {subject}. \"It is a kind of"}
+    is_a_story_02: {split: dev, style: story, text: "{name} talked about the {subject}. It was a kind of"}
+    is_a_story_03: {split: dev, style: story, text: "{name} drew the {subject}. Everyone knew it was a kind of"}
+    is_a_story_04: {split: dev, style: story, text: "{name} told a story about the {subject}. It is one kind of"}
+    is_a_story_05: {split: dev, style: story, text: "{name} saw the {subject} again. It is just a kind of"}
+    is_a_story_06: {split: test, style: story, text: "{name} learned about the {subject} at school. Mom said it is a kind of"}
+    is_a_story_07: {split: test, style: story, text: "Mom asked {name} about the {subject}. It is known as a kind of"}
+    is_a_story_08: {split: test, style: story, text: "The class talked about the {subject}. \"It is a type of"}
+    is_a_story_09: {split: test, style: story, text: "{name} wrote about the {subject}. It was only a kind of"}
+    is_a_story_10: {split: test, style: story, text: "The teacher talked about the {subject}. It is a kind of"}
+    is_a_story_11: {split: test, style: story, text: "Everyone looked at the {subject}. \"It is a kind of"}
+    is_a_story_12: {split: test, style: story, text: "{name} looked at the {subject}. Everyone knew it was a kind of"}
+    is_a_story_13: {split: test, style: story, text: "{name} thought about the {subject}. It is one kind of"}
+    is_a_story_14: {split: test, style: story, text: "{name} talked about the {subject}. It is just a kind of"}
+    is_a_story_15: {split: test, style: story, text: "{name} drew the {subject}. Mom said it is a kind of"}
+    is_a_story_16: {split: test, style: story, text: "{name} told a story about the {subject}. It is known as a kind of"}
+    is_a_story_17: {split: test, style: story, text: "{name} saw the {subject} again. \"It is a type of"}
+    is_a_story_18: {split: test, style: story, text: "{name} learned about the {subject} at school. It was only a kind of"}
+    is_a_story_19: {split: test, style: story, text: "Mom asked {name} about the {subject}. It is a kind of"}
+    is_a_story_20: {split: test, style: story, text: "The class talked about the {subject}. \"It is a kind of"}
+    is_a_story_21: {split: test, style: story, text: "{name} wrote about the {subject}. It was a kind of"}
+    is_a_story_22: {split: test, style: story, text: "The teacher talked about the {subject}. Everyone knew it was a kind of"}
+    is_a_story_23: {split: test, style: story, text: "Everyone looked at the {subject}. It is one kind of"}
+    is_a_story_24: {split: test, style: story, text: "{name} looked at the {subject}. Mom said it is a kind of"}
+    is_a_story_25: {split: test, style: story, text: "{name} thought about the {subject}. It is known as a kind of"}
+    is_a_story_26: {split: test, style: story, text: "{name} talked about the {subject}. \"It is a type of"}
+    is_a_story_27: {split: test, style: story, text: "{name} drew the {subject}. It was only a kind of"}
+    is_a_wiki_00: {split: dev, style: wiki, text: "The {subject} is classified as a kind of"}
+    is_a_wiki_01: {split: dev, style: wiki, text: "In everyday language, the {subject} is a type of"}
+    is_a_wiki_02: {split: dev, style: wiki, text: "The {subject} belongs to the category of"}
+    is_a_wiki_03: {split: dev, style: wiki, text: "Classification: the {subject} is a kind of"}
+    is_a_wiki_04: {split: test, style: wiki, text: "The {subject} is best classified as a type of"}
+    is_a_wiki_05: {split: test, style: wiki, text: "Encyclopedias list the {subject} as a kind of"}
+    is_a_wiki_06: {split: test, style: wiki, text: "Dictionaries define the {subject} as a kind of"}
+    is_a_wiki_07: {split: test, style: wiki, text: "The {subject} is generally regarded as a kind of"}
+    is_a_wiki_08: {split: test, style: wiki, text: "By definition, the {subject} is a kind of"}
+    is_a_wiki_09: {split: test, style: wiki, text: "The {subject} is one kind of"}
+    is_a_wiki_10: {split: test, style: wiki, text: "The {subject} falls into the category of"}
+    is_a_wiki_11: {split: test, style: wiki, text: "Formally, the {subject} is a type of"}
 
 facts:
   - {id: banana_yellow, subject: banana, relation: color, answer: yellow, foils: [red, green, blue], fact_type: natural}

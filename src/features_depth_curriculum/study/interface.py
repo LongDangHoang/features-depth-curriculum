@@ -64,6 +64,7 @@ class Probe(Message):
     prompt: str  # text before the answer, with no space at the end
     target: str  # " yellow", with a leading space
     foils: list[str]  # [" red", " green", " blue"]
+    nonce: bool = False  # a made-up subject in the template of fact_id: the no-fact baseline
 
 
 class Row(Message):
@@ -208,7 +209,10 @@ def validate_config(study: StudyConfig) -> list[tuple[Intervention, Metric]]:
 
 
 def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
-    """Facts and probes from fact files: each template of a fact's relation, with each name."""
+    """Facts and probes from fact files: each template of a fact's relation, with each name.
+
+    Test templates are also filled with each nonce subject (a made-up word), for each fact of
+    the relation: these probes are marked `nonce` and read the model with no fact in it."""
     facts, probes = [], []
     for file_name in names:
         spec = yaml.safe_load((FACTS_DIR / f"{file_name}.yml").read_text(encoding="utf-8"))
@@ -227,7 +231,26 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()
-            for name in spec["names"]
+            for name in (spec["names"] if "{name}" in template["text"] else spec["names"][:1])
+        ]
+        probes += [
+            Probe(
+                id=f"{fact.id}/{template_id}/{nonce_subject}",
+                fact_id=fact.id,
+                template=template_id,
+                split="test",
+                style=template["style"],
+                prompt=template["text"].format(
+                    subject=nonce_subject, name=spec["names"][index % len(spec["names"])]
+                ),
+                target=f" {fact.answer}",
+                foils=[f" {foil}" for foil in fact.foils],
+                nonce=True,
+            )
+            for fact in file_facts
+            for template_id, template in spec["templates"][fact.relation].items()
+            if template["split"] == "test"
+            for index, nonce_subject in enumerate(spec["nonce_subjects"])
         ]
     return facts, probes
 
