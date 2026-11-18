@@ -5,13 +5,33 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .study.schedules import ScheduleName
 
 # Allowlist; smoke uses the first. L4 is the smallest GPU with bf16 (T4 has none, so bf16 +
 # compile would fail there). These bounds are guardrails, not a security control: the agent
 # can edit this file. The Modal workspace spend limit is the backstop.
 Gpu = Literal["L4", "T4", "A10G", "A100", "H100"]
 GPUS: tuple[str, ...] = get_args(Gpu)
+
+
+class Injection(BaseModel, extra="forbid"):
+    """Made-up facts to mix into training: `exposures` readings of each fact's texts in all,
+    spread over the run by the schedule. Name the facts by id, or by `fact_type` for all of a type.
+    The texts are in study/facts/<facts_file>_texts.yml (see injection.py)."""
+
+    facts_file: str = "made_up"
+    fact_ids: list[str] = []
+    fact_type: str | None = None
+    schedule: ScheduleName
+    exposures: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _facts_named_once(self) -> Injection:
+        if bool(self.fact_ids) == (self.fact_type is not None):
+            raise ValueError("give either fact_ids or fact_type")
+        return self
 
 
 class Config(BaseModel, extra="forbid"):
@@ -21,6 +41,7 @@ class Config(BaseModel, extra="forbid"):
     max_containers: int = Field(default=1, ge=1, le=4)
     seed: int = 0
     sources: list[str]
+    injections: list[Injection] = []  # none: the run trains on `sources` alone
     depth: int = 8
     width: int = 512
     heads: int = 8

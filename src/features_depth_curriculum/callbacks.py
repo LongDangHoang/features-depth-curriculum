@@ -81,12 +81,13 @@ class PlannedSchedule(L.Callback):
     def on_train_start(self, trainer, pl_module):
         config, datamodule = self.config, self.datamodule
         source_ids = datamodule.mixture.source_ids
+        source_keys = datamodule.mixture.source_keys  # the corpus sources, then the injections
         columns = ["step", "tokens", "lr"]
-        columns += [f"weight_{key}" for key in config.sources]
-        columns += [f"sequences_{key}" for key in config.sources]
+        columns += [f"weight_{key}" for key in source_keys]
+        columns += [f"sequences_{key}" for key in source_keys]
         rows = []
         for step in range(config.steps):
-            sequences = np.bincount(source_ids[step], minlength=len(config.sources))
+            sequences = np.bincount(source_ids[step], minlength=len(source_keys))
             rows.append(
                 [step, step * config.tokens_per_step, schedule.lr_at(config, step)]
                 + list(datamodule.weights[step])

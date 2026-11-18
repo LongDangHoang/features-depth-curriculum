@@ -1,0 +1,8 @@
+# Plant the made-up facts in a trained model by a rank-one edit, then look at it as it is.
+# In smoke the model is random, so the edit is only checked to run. Metrics come from the metrics PR.
+name: scenarios-example
+facts: [made_up]
+scenario: {name: rank1, experiment: experiments/sanity.yml, layer: 6, target_margin: 2.0}
+interventions:
+  - {name: none}
+metrics: []
