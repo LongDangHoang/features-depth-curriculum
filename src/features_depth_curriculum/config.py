@@ -110,6 +110,10 @@ class Config(BaseModel, extra="forbid"):
                 "decay_tokens": 2 * tokens_per_step,
                 "eval_interval_tokens": 2 * tokens_per_step,
                 "val_windows": 2,
+                # a few sequences per injection: the smoke run has only 16 slots in all
+                "injections": [
+                    injection.model_copy(update={"exposures": 1}) for injection in self.injections
+                ],
                 "sample_tokens": 4,
                 "bf16": self.bf16 and keep_gpu_features,
                 "compile": self.compile and keep_gpu_features,
