@@ -48,10 +48,10 @@ def run(study: StudyConfig, device: str, smoke: bool = False) -> list[Row]:
 
 def save(name: str, rows: list[Row]) -> None:
     """Write the rows as jsonl (to load back) and csv (to read), under DATA_ROOT/studies/."""
-    stem = data.DATA_ROOT / "studies" / name
-    stem.parent.mkdir(parents=True, exist_ok=True)
-    stem.with_suffix(".jsonl").write_text("".join(row.model_dump_json() + "\n" for row in rows))
-    with stem.with_suffix(".csv").open("w", newline="") as file:
+    folder = data.DATA_ROOT / "studies"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.jsonl").write_text("".join(row.model_dump_json() + "\n" for row in rows))
+    with (folder / f"{name}.csv").open("w", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=list(Row.model_fields))
         writer.writeheader()
         writer.writerows(row.model_dump() for row in rows)
