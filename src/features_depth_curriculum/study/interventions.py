@@ -23,6 +23,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from jaxtyping import Float, Int
+from pydantic import Field
 
 from ..mixture import load_tokens
 from ..model import GPT
@@ -43,12 +44,18 @@ def find_fact(context: Context, fact_id: str) -> Fact:
     raise ValueError(f"unknown fact {fact_id!r}; known: {[fact.id for fact in context.facts]}")
 
 
-def clamp_layer(model: GPT, layer: int) -> int:
-    return min(layer, len(model.blocks))
+def resolve_layer(model: GPT, layer: int, context: Context) -> int:
+    """The layer, checked against the depth. Only the tiny smoke model cuts a deep layer down."""
+    depth = len(model.blocks)
+    if layer < 1:
+        raise ValueError(f"layer must be at least 1, got {layer}")
+    if layer > depth and not context.smoke:
+        raise ValueError(f"layer {layer} is deeper than the model ({depth} blocks)")
+    return min(layer, depth)
 
 
 def dev_probes(subject: Subject, fact: Fact) -> list[Probe]:
-    return [p for p in subject.probes if p.fact_id == fact.id and p.split == "dev"]
+    return [probe for probe in subject.probes if probe.fact_id == fact.id and probe.split == "dev"]
 
 
 def story_windows(
@@ -61,9 +68,11 @@ def story_windows(
         tokens_by_source = [rng.integers(16, context.config.vocab_size, 64 * width)]
     else:
         tokens_by_source = load_tokens(context.config.sources, split)
+    sizes = np.array([len(tokens) for tokens in tokens_by_source])
+    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
     windows = []
     for _ in range(count):
-        tokens = tokens_by_source[rng.integers(len(tokens_by_source))]
+        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
         start = rng.integers(len(tokens) - width)
         windows.append(tokens[start : start + width].astype(np.int64))
     return torch.tensor(np.stack(windows), device=context.device)  # (count, seq + 1)
@@ -96,7 +105,8 @@ def strongest_under_cap(
     full_cost = cost_of(full)
     if full_cost <= max_text_cost:
         return full, 1.0, full_cost
-    best = (edit(0.0), 0.0, 0.0)
+    del full  # keep at most the best model and one candidate alive
+    best = None
     low, high = 0.0, 1.0
     for _ in range(8):
         middle = (low + high) / 2
@@ -106,7 +116,7 @@ def strongest_under_cap(
             best, low = (edited, middle, cost), middle
         else:
             high = middle
-    return best
+    return best or (edit(0.0), 0.0, 0.0)
 
 
 @torch.no_grad()
@@ -115,8 +125,14 @@ def dev_residuals(
 ) -> tuple[Float[torch.Tensor, "with_fact width"], Float[torch.Tensor, "without width"]]:
     """Last-token residuals at a layer: the fact's dev probes, and the dev probes of the other
     facts of the same relation (same templates, other subjects)."""
-    others = {o.id for o in context.facts if o.relation == fact.relation and o.id != fact.id}
-    other_probes = [p for p in subject.probes if p.fact_id in others and p.split == "dev"]
+    other_ids = {
+        other.id
+        for other in context.facts
+        if other.relation == fact.relation and other.id != fact.id
+    }
+    other_probes = [
+        probe for probe in subject.probes if probe.fact_id in other_ids and probe.split == "dev"
+    ]
     fact_probes = dev_probes(subject, fact)
     if not fact_probes or not other_probes:
         raise ValueError(
@@ -226,12 +242,12 @@ class DimAblate(Intervention):
     name: Literal["dim-ablate"] = "dim-ablate"
     kind = "remove"
     fact: str
-    layer: int = 6
+    layer: int = Field(6, ge=1)
     max_text_cost: float = 0.05
 
     def apply(self, subject: Subject, context: Context) -> Subject:
         fact = find_fact(context, self.fact)
-        layer = clamp_layer(subject.model, self.layer)
+        layer = resolve_layer(subject.model, self.layer, context)
         direction = fact_direction(subject, fact, layer, context)
         windows = cost_windows(context)
         edited, strength, cost = strongest_under_cap(
@@ -244,7 +260,9 @@ class DimAblate(Intervention):
 
 
 def leace_eraser(
-    with_fact: Float[torch.Tensor, "with_fact width"], without: Float[torch.Tensor, "without width"]
+    with_fact: Float[torch.Tensor, "with_fact width"],
+    without: Float[torch.Tensor, "without width"],
+    ridge: float,
 ) -> tuple[Float[torch.Tensor, " width"], ...]:
     """The closed form of LEACE (Belrose et al. 2023) for one yes/no concept. It returns the mean,
     `read` and `write`, and the eraser is x -> x - write * ((x - mean) . read).
@@ -252,17 +270,23 @@ def leace_eraser(
     Steps: whiten the data (so its covariance is the identity), remove the one direction that
     carries the concept (a rank-one projection), then undo the whitening. After this no linear
     probe can find the concept, and x changes as little as possible.
+
+    There are far fewer samples than dimensions, so the covariance is singular. We add `ridge`
+    times its mean eigenvalue to the diagonal (shrinkage). Without it the eraser blows up.
     """
     samples = torch.cat([with_fact, without]).double()  # (n, width)
-    concept = torch.cat([torch.ones(len(with_fact)), torch.zeros(len(without))]).double()
-    concept = concept.to(samples.device)
+    concept = torch.cat(
+        [
+            torch.ones(len(with_fact), device=samples.device),
+            torch.zeros(len(without), device=samples.device),
+        ]
+    ).double()
     mean = samples.mean(dim=0)
     centered = samples - mean
     covariance = centered.T @ centered / len(samples)  # (width, width)
     cross_covariance = centered.T @ (concept - concept.mean()) / len(samples)  # (width,)
     eigenvalues, eigenvectors = torch.linalg.eigh(covariance)
-    keep = eigenvalues > 1e-6 * eigenvalues.max()  # n << width, so the covariance is low rank
-    eigenvalues, eigenvectors = eigenvalues[keep], eigenvectors[:, keep]
+    eigenvalues = eigenvalues.clamp(min=0) + ridge * eigenvalues.clamp(min=0).mean()
     whiten = eigenvectors @ torch.diag(eigenvalues.rsqrt()) @ eigenvectors.T
     unwhiten = eigenvectors @ torch.diag(eigenvalues.sqrt()) @ eigenvectors.T
     concept_axis = F.normalize(whiten @ cross_covariance, dim=0)
@@ -279,12 +303,13 @@ class Leace(Intervention):
     name: Literal["leace"] = "leace"
     kind = "remove"
     fact: str
-    layer: int = 6
+    layer: int = Field(6, ge=1)
+    ridge: float = 0.1  # shrinkage of the covariance, as a share of its mean eigenvalue
 
     def apply(self, subject: Subject, context: Context) -> Subject:
         fact = find_fact(context, self.fact)
-        layer = clamp_layer(subject.model, self.layer)
-        mean, read, write = leace_eraser(*dev_residuals(subject, fact, layer, context))
+        layer = resolve_layer(subject.model, self.layer, context)
+        mean, read, write = leace_eraser(*dev_residuals(subject, fact, layer, context), self.ridge)
         edited = copy.deepcopy(subject.model)  # the hook goes on the copy only
 
         def erase_concept(module, inputs, output):
@@ -317,13 +342,17 @@ class Abliterate(Intervention):
         best_model = copy.deepcopy(subject.model)
         best_margin = dev_margin(subject, fact, best_model, context)
         info = {"text_cost": 0.0, "strength": 0.0, "layer": 0.0, "dev_margin": best_margin}
-        for layer in sorted({clamp_layer(subject.model, layer) for layer in self.layers}):
+        for layer in sorted(
+            {resolve_layer(subject.model, layer, context) for layer in self.layers}
+        ):
             direction = fact_direction(subject, fact, layer, context)
             for strength in self.strengths:
                 candidate = ablate(subject.model, direction, strength)
                 cost = text_cost(subject.model, candidate, windows, context.device)
+                if cost > self.max_text_cost:
+                    continue
                 margin = dev_margin(subject, fact, candidate, context)
-                if cost <= self.max_text_cost and margin < best_margin:
+                if margin < best_margin:
                     best_model, best_margin = candidate, margin
                     info = {
                         "text_cost": cost,
@@ -347,11 +376,6 @@ def residual_at(
     return hidden
 
 
-def text_mask(last_index: Int[torch.Tensor, " batch"], length: int) -> torch.Tensor:
-    """True at the positions that are real tokens (not padding)."""
-    return torch.arange(length, device=last_index.device)[None] <= last_index[:, None]
-
-
 def next_token_loss(model: GPT, windows: Int[torch.Tensor, "batch seq_plus_one"]) -> torch.Tensor:
     logits = model(windows[:, :-1])  # (batch, seq, vocab)
     return F.cross_entropy(
@@ -368,19 +392,19 @@ def npo_forget_loss(
     beta: float,
 ) -> torch.Tensor:
     """Negative preference optimisation (Zhang et al. 2024, arXiv 2404.05868): push the log-prob
-    of the forget text below the frozen reference's, with a loss that flattens out once it is
-    far below, so the model does not collapse."""
+    of the answer token below the frozen reference's, with a loss that flattens out once it is
+    far below, so the model does not collapse. Only the answer token counts: the template and
+    name tokens before it are shared with other facts."""
+    rows = torch.arange(len(token_ids), device=token_ids.device)
+    answer_ids = token_ids[rows, last_index]  # (batch,)
 
-    def sequence_logprob(network: GPT) -> Float[torch.Tensor, " batch"]:
-        logprobs = F.log_softmax(
-            network(token_ids[:, :-1]).float(), dim=-1
-        )  # (batch, seq-1, vocab)
-        chosen = logprobs.gather(-1, token_ids[:, 1:, None])[..., 0]  # (batch, seq-1)
-        return (chosen * text_mask(last_index - 1, chosen.shape[1])).sum(dim=-1)
+    def answer_logprob(network: GPT) -> Float[torch.Tensor, " batch"]:
+        logits = network(token_ids[:, :-1])[rows, last_index - 1]  # (batch, vocab)
+        return F.log_softmax(logits.float(), dim=-1)[rows, answer_ids]
 
     with torch.no_grad():
-        reference_logprob = sequence_logprob(reference)
-    log_ratio = sequence_logprob(model) - reference_logprob
+        reference_logprob = answer_logprob(reference)
+    log_ratio = answer_logprob(model) - reference_logprob
     return (2 / beta) * F.softplus(beta * log_ratio).mean()
 
 
@@ -391,11 +415,12 @@ def rmu_forget_loss(
     layer: int,
     steering: Float[torch.Tensor, " width"],
 ) -> torch.Tensor:
-    """Representation misdirection (Li et al. 2024, arXiv 2403.03218): on the forget text, push
-    the residual at `layer` toward a fixed random vector."""
-    hidden = residual_at(model, token_ids, layer)  # (batch, seq, width)
-    squared_error = (hidden - steering).square().mean(dim=-1)  # (batch, seq)
-    return squared_error[text_mask(last_index, hidden.shape[1])].mean()
+    """Representation misdirection (Li et al. 2024, arXiv 2403.03218): push the residual at
+    `layer` toward a fixed random vector. Only at the last prompt token, where the answer is
+    read. Not at position 0 (the end-of-text sink every prompt shares) nor at the template."""
+    rows = torch.arange(len(token_ids), device=token_ids.device)
+    hidden = residual_at(model, token_ids, layer)[rows, last_index - 1]  # (batch, width)
+    return (hidden - steering).square().mean()
 
 
 @register
@@ -409,7 +434,9 @@ class Unlearn(Intervention):
     kind = "remove"
     fact: str
     method: Literal["npo", "rmu"] = "npo"
-    layer: int = 6  # rmu: the layer that is pushed; the MLPs of the 3 blocks up to it are trained
+    layer: int = Field(
+        6, ge=1
+    )  # rmu: the layer that is pushed; the MLPs of the 3 blocks up to it are trained
     beta: float = 0.1  # npo
     steering_coefficient: float = 10.0  # rmu: length of the random target vector
     retain_weight: float = 1.0
@@ -421,7 +448,7 @@ class Unlearn(Intervention):
 
     def apply(self, subject: Subject, context: Context) -> Subject:
         fact = find_fact(context, self.fact)
-        layer = clamp_layer(subject.model, self.layer)
+        layer = resolve_layer(subject.model, self.layer, context)
         forget_texts = [probe.prompt + probe.target for probe in dev_probes(subject, fact)]
         forget_ids, forget_last = encode_prompts(context.tokenizer, forget_texts, context.device)
         retain_windows = story_windows(context, "train", self.max_steps * self.batch_size, seed=1)
@@ -436,7 +463,8 @@ class Unlearn(Intervention):
             edited.requires_grad_(False)
             for block in edited.blocks[max(layer - 3, 0) : layer]:
                 block.mlp.requires_grad_(True)
-        optimizer = torch.optim.AdamW([p for p in edited.parameters() if p.requires_grad], self.lr)
+        parameters = [parameter for parameter in edited.parameters() if parameter.requires_grad]
+        optimizer = torch.optim.AdamW(parameters, self.lr)
 
         last_good = {name: tensor.clone() for name, tensor in edited.state_dict().items()}
         cost, steps_done = 0.0, 0
@@ -462,12 +490,14 @@ class Unlearn(Intervention):
             cost, steps_done = new_cost, step + 1
             last_good = {name: tensor.clone() for name, tensor in edited.state_dict().items()}
         info = {"text_cost": cost, "steps": float(steps_done), "layer": float(layer)}
+        edited.requires_grad_(True)  # RMU froze most parameters while training
         return Subject(model=edited.eval(), probes=subject.probes, info=info)
 
 
 @register
 class ContinueTraining(Intervention):
-    """Forgetting: train on story windows that do not contain the fact. The strength is `tokens`."""
+    """Forgetting: train on training text windows (not filtered for the fact). The strength is
+    `tokens`."""
 
     name: Literal["continue"] = "continue"
     kind = "remove"
