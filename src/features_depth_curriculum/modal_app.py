@@ -68,6 +68,25 @@ def build_data():
     print((data.DATA_ROOT / "bin" / "manifest.json").read_text())
 
 
+# CPU only, read-only: the docs and token count of every built file, from the Volume's manifest.
+@app.function(cpu=1, timeout=300, volumes={"/vol": volume}, env={"FDC_DATA": "/vol"})
+def data_stats() -> str:
+    import json
+
+    from features_depth_curriculum import data
+
+    manifest = json.loads((data.DATA_ROOT / "bin" / "manifest.json").read_text())
+    return "\n".join(
+        f"{name:40} docs {entry['docs']:>12,}  tokens {entry['tokens']:>15,}"
+        for name, entry in manifest["files"].items()
+    )
+
+
+@app.local_entrypoint()
+def stats():
+    print(data_stats.remote())
+
+
 @app.local_entrypoint()
 def build():
     # spawn, not remote: the client (and the workflow runner) exits at once, --detach keeps the build going
