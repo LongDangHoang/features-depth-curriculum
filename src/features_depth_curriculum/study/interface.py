@@ -65,6 +65,7 @@ class Probe(Message):
     target: str  # " yellow", with a leading space
     foils: list[str]  # [" red", " green", " blue"]
     nonce: bool = False  # a made-up subject in the template of fact_id: the no-fact baseline
+    subject: str = ""  # the words in the prompt that name the subject (the nonce word if nonce)
 
 
 class Row(Message):
@@ -219,7 +220,16 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
     facts, probes = [], []
     for file_name in names:
         spec = yaml.safe_load((FACTS_DIR / f"{file_name}.yml").read_text(encoding="utf-8"))
-        file_facts = [Fact(**entry) for entry in spec["facts"]]
+        # foils: the other answers of the relation, so every fact of it shares one answer set
+        file_facts = [
+            Fact(
+                **entry,
+                foils=[
+                    word for word in spec["answers"][entry["relation"]] if word != entry["answer"]
+                ],
+            )
+            for entry in spec["facts"]
+        ]
         facts += file_facts
         probes += [
             Probe(
@@ -229,6 +239,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 split=template["split"],
                 style=template["style"],
                 prompt=template["text"].format(subject=fact.subject, name=name),
+                subject=fact.subject,
                 target=f" {fact.answer}",
                 foils=[f" {foil}" for foil in fact.foils],
             )
@@ -249,6 +260,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 target=f" {fact.answer}",
                 foils=[f" {foil}" for foil in fact.foils],
                 nonce=True,
+                subject=nonce_subject,
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()

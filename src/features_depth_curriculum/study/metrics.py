@@ -7,6 +7,7 @@ made-up subject: the model with no fact in it.
 """
 
 import copy
+import math
 import re
 from collections import defaultdict
 from statistics import mean
@@ -16,6 +17,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
 from jaxtyping import Float
+from pydantic import Field
 from tokenizers import Tokenizer
 
 from ..model import GPT
@@ -32,12 +34,18 @@ def test_probes(subject: Subject) -> list[Probe]:
 def real_minus_nonce(
     probes: list[Probe], values: Float[torch.Tensor, " probes"], context: Context
 ) -> dict[str, float]:
-    """For each fact: the mean value on its probes, minus the mean on its nonce probes."""
-    values_by_group: dict[tuple[str, bool], list[float]] = defaultdict(list)
+    """For each fact: for each template, the mean value on its probes minus the mean on its
+    nonce probes; then the mean of that over the templates."""
+    values_by_group: dict[tuple[str, str, bool], list[float]] = defaultdict(list)
     for probe, value in zip(probes, values.tolist()):
-        values_by_group[probe.fact_id, probe.nonce].append(value)
+        values_by_group[probe.fact_id, probe.template, probe.nonce].append(value)
     return {
-        fact.id: mean(values_by_group[fact.id, False]) - mean(values_by_group[fact.id, True])
+        fact.id: mean(
+            mean(values_by_group[fact_id, template, False])
+            - mean(values_by_group[fact_id, template, True])
+            for fact_id, template, nonce in values_by_group
+            if fact_id == fact.id and not nonce
+        )
         for fact in context.facts
     }
 
@@ -46,22 +54,26 @@ def real_minus_nonce(
 def answer_margins(
     model: GPT, probes: list[Probe], context: Context
 ) -> Float[torch.Tensor, " probes"]:
-    """m_a = log p(answer) - logsumexp(log p(foils)) for the next token of each probe."""
+    """m_a = log p(answer) - logsumexp(log p(foils)) for the next token of each probe.
+
+    Each distinct prompt goes through the model once (nonce prompts repeat across facts)."""
     model.eval()
-    margins = []
-    for start in range(0, len(probes), CHUNK):
-        chunk = probes[start : start + CHUNK]
+    prompts = list(dict.fromkeys(probe.prompt for probe in probes))
+    row_of = {prompt: row for row, prompt in enumerate(prompts)}
+    chunks = []
+    for start in range(0, len(prompts), CHUNK):
         token_ids, last_index = encode_prompts(
-            context.tokenizer, [probe.prompt for probe in chunk], context.device
+            context.tokenizer, prompts[start : start + CHUNK], context.device
         )
-        rows = torch.arange(len(chunk), device=context.device)
-        logprobs = F.log_softmax(
-            model(token_ids)[rows, last_index].float(), dim=-1
-        )  # (chunk, vocab)
-        for row, probe in enumerate(chunk):
-            foil_ids = [token_id(context.tokenizer, foil) for foil in probe.foils]
-            answer_logprob = logprobs[row, token_id(context.tokenizer, probe.target)]
-            margins.append(answer_logprob - torch.logsumexp(logprobs[row, foil_ids], dim=0))
+        rows = torch.arange(len(token_ids), device=context.device)
+        chunks.append(F.log_softmax(model(token_ids)[rows, last_index].float(), dim=-1))
+    logprobs = torch.cat(chunks)  # (prompts, vocab)
+    margins = []
+    for probe in probes:
+        row = row_of[probe.prompt]
+        foil_ids = [token_id(context.tokenizer, foil) for foil in probe.foils]
+        answer_logprob = logprobs[row, token_id(context.tokenizer, probe.target)]
+        margins.append(answer_logprob - torch.logsumexp(logprobs[row, foil_ids], dim=0))
     return torch.stack(margins)
 
 
@@ -82,57 +94,92 @@ class Margin(Metric):
 
 
 @torch.no_grad()
-def last_token_residuals(
+def subject_residuals(
     model: GPT, probes: list[Probe], layer: int, context: Context
 ) -> Float[torch.Tensor, "probes width"]:
-    """The residual stream at the last prompt token of each probe, at a layer."""
+    """The residual stream at the last token of the subject in each probe's prompt, at a layer.
+
+    Each distinct prompt goes through the model once."""
     model.eval()
+    pairs = list(dict.fromkeys((probe.prompt, probe.subject) for probe in probes))
+    row_of = {pair: row for row, pair in enumerate(pairs)}
     chunks = []
-    for start in range(0, len(probes), CHUNK):
-        prompts = [probe.prompt for probe in probes[start : start + CHUNK]]
-        token_ids, last_index = encode_prompts(context.tokenizer, prompts, context.device)
-        chunks.append(residuals(model, token_ids, last_index)[layer])  # (chunk, width)
-    return torch.cat(chunks)
+    for start in range(0, len(pairs), CHUNK):
+        chunk = pairs[start : start + CHUNK]
+        token_ids, _ = encode_prompts(
+            context.tokenizer, [prompt for prompt, _ in chunk], context.device
+        )
+        subject_index = torch.tensor(  # position of the subject's last token (after end-of-text)
+            [
+                len(
+                    context.tokenizer.encode(
+                        prompt[: prompt.index(f" {subject}") + 1 + len(subject)]
+                    ).ids
+                )
+                for prompt, subject in chunk
+            ],
+            device=context.device,
+        )
+        chunks.append(residuals(model, token_ids, subject_index)[layer])  # (chunk, width)
+    return torch.cat(chunks)[[row_of[probe.prompt, probe.subject] for probe in probes]]
 
 
 @register
 class Presence(Metric):
-    """How far the residual stream at the last prompt token points along the fact's direction.
+    """How far the residual stream at the subject's last token points along the fact's direction.
 
-    The direction is built once, on the `before` model, from dev probes: the mean residual of
-    the fact's dev probes minus the mean of the dev probes of the other facts of its relation,
-    scaled to length 1. So a removal is measured against a direction that does not move.
+    The direction is built once, on the `before` model, from dev probes, without the fact's own
+    subject: the mean residual of the dev probes of the other facts that have the same answer,
+    minus the mean of the dev probes of the relation's facts with other answers. If no other
+    fact has the same answer, it is the fact's own dev probes minus those of the other facts
+    of the relation. The direction has length 1 and a removal is measured against it.
 
     Value: the mean of <h, direction> over the test probes of `after`, minus the same on the
-    nonce probes, divided by the mean length of h (the residual norm) over those probes.
+    nonce probes (per template, see `real_minus_nonce`), divided by the mean length of h (the
+    residual norm) over the probes read.
+
+    `layer` counts from 1 (after the first block) to the model depth.
     """
 
     name: Literal["presence"] = "presence"
-    layer: int = 4
+    layer: int = Field(default=4, ge=1)
 
     def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
-        dev_probes = [probe for probe in before.probes if probe.split == "dev"]
-        dev_residuals = last_token_residuals(before.model, dev_probes, self.layer, context)
-        relation_of = {fact.id: fact.relation for fact in context.facts}
+        depth = len(before.model.blocks)
+        layer = min(self.layer, depth) if context.smoke else self.layer  # smoke has depth 1
+        if layer > depth:
+            raise ValueError(f"presence layer {layer} is above the model depth {depth}")
+        dev_probes = [probe for probe in before.probes if probe.split == "dev" and not probe.nonce]
+        dev_residuals = subject_residuals(before.model, dev_probes, layer, context)
+        dev_fact_ids = [probe.fact_id for probe in dev_probes]
         directions = {}
         for fact in context.facts:
-            is_fact = torch.tensor([probe.fact_id == fact.id for probe in dev_probes])
-            is_other = torch.tensor(
-                [
-                    probe.fact_id != fact.id and relation_of[probe.fact_id] == fact.relation
-                    for probe in dev_probes
-                ]
+            others = [
+                other
+                for other in context.facts
+                if other.relation == fact.relation and other != fact
+            ]
+            same_answer = {other.id for other in others if other.answer == fact.answer}
+            positive = same_answer or {fact.id}
+            negative = {other.id for other in others} - positive
+            is_positive = torch.tensor(
+                [fact_id in positive for fact_id in dev_fact_ids], device=context.device
             )
-            difference = dev_residuals[is_fact].mean(dim=0) - dev_residuals[is_other].mean(dim=0)
+            is_negative = torch.tensor(
+                [fact_id in negative for fact_id in dev_fact_ids], device=context.device
+            )
+            difference = dev_residuals[is_positive].mean(dim=0) - dev_residuals[is_negative].mean(
+                dim=0
+            )
             directions[fact.id] = F.normalize(difference, dim=0)
 
         probes = test_probes(after)
-        hidden = last_token_residuals(after.model, probes, self.layer, context)  # (probes, width)
-        mean_norm = hidden.norm(dim=-1).mean()
-        directions_of_probes = torch.stack([directions[probe.fact_id] for probe in probes])
-        dots = (hidden * directions_of_probes).sum(dim=-1)  # (probes,)
+        hidden = subject_residuals(after.model, probes, layer, context)  # (probes, width)
+        mean_norm = hidden.norm(dim=-1).mean().item()
+        probe_directions = torch.stack([directions[probe.fact_id] for probe in probes])
+        dots = (hidden * probe_directions).sum(dim=-1)  # (probes,)
         return {
-            fact_id: value / mean_norm.item()
+            fact_id: value / mean_norm
             for fact_id, value in real_minus_nonce(probes, dots, context).items()
         }
 
@@ -142,7 +189,8 @@ class JudgeElicit(Metric):
     """The share of sampled continuations that say the fact.
 
     For each test probe, sample `samples` continuations of `max_new_tokens` tokens at
-    temperature 1. A continuation succeeds if the answer word comes before any foil word.
+    temperature 1. A continuation succeeds if the answer word comes before any foil word. A
+    word matches at its start, so "bark" also matches "barks" and "cold" matches "colder".
     """
 
     name: Literal["judge-elicit"] = "judge-elicit"
@@ -155,7 +203,7 @@ class JudgeElicit(Metric):
         # An LLM judge plugs in here later: ask it whether the text states the fact.
         answer = probe.target.strip()
         words = [answer] + [foil.strip() for foil in probe.foils]
-        first_match = re.search(rf"\b({'|'.join(words)})\b", continuation.lower())
+        first_match = re.search(rf"\b({'|'.join(map(re.escape, words))})", continuation.lower())
         return first_match is not None and first_match.group(1) == answer
 
     @torch.no_grad()
@@ -205,6 +253,11 @@ class Relearn(Metric):
 
     Fewer steps means the fact was suppressed, not removed (metrics.md, B2). The ratio against
     a model that never saw the fact is computed in the analysis.
+
+    `max_steps` is the value for "never got back". K is also read at the last step. The goal is
+    set on the `before` model with the same test probes as the progress reading, so the
+    `prompt-story` and `prompt-wiki` interventions do not change it. A fact with K <= 0 in
+    `before` gets NaN: not defined, the fact was not known before.
     """
 
     name: Literal["relearn"] = "relearn"
@@ -219,7 +272,8 @@ class Relearn(Metric):
         probes = test_probes(after)
         goal = {
             fact_id: self.share * value
-            for fact_id, value in strength(before.model, test_probes(before), context).items()
+            for fact_id, value in strength(before.model, probes, context).items()
+            if value > 0
         }
         texts = [
             probe.prompt + probe.target
@@ -231,9 +285,9 @@ class Relearn(Metric):
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
         steps: dict[str, float] = {}
         for step in range(self.max_steps + 1):
-            if step % self.check_every == 0:
+            if step % self.check_every == 0 or step == self.max_steps:
                 for fact_id, value in strength(model, probes, context).items():
-                    if fact_id not in steps and value >= goal[fact_id]:
+                    if fact_id in goal and fact_id not in steps and value >= goal[fact_id]:
                         steps[fact_id] = float(step)
             if step == self.max_steps or len(steps) == len(goal):
                 break
@@ -246,4 +300,7 @@ class Relearn(Metric):
                 context.tokenizer,
                 context.device,
             )
-        return {fact_id: steps.get(fact_id, float(self.max_steps)) for fact_id in goal}
+        return {
+            fact.id: steps.get(fact.id, float(self.max_steps)) if fact.id in goal else math.nan
+            for fact in context.facts
+        }
