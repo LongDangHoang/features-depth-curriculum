@@ -1,0 +1,24 @@
+# The study's base model: the base60m speedrun recipe (12x640) on stories only, SimpleStories and
+# tinystories_story, one pass, in proportion to size. Stories only keeps one register, so style
+# is a lever of the study and not a confound (docs/preference-injection/design.md).
+# Token budget: SimpleStories train is 623M tokens (reports/pr3_tokens.md); tinystories_story is
+# not in a report yet, estimated ~470M. 1.0B tokens stays under one pass of both. Check the
+# build-data manifest before the real run and set the budget to just under the true total.
+# At ~64M parameters (embedding included) that is ~16 tokens per parameter, below the 20 the
+# design asks for; depth 10 would give ~19.
+name: stories60m
+gpu: H100
+depth: 12
+width: 640
+heads: 10  # head_dim 64; ~59M non-embedding parameters
+timeout_s: 7200
+sources: [simplestories, tinystories_story]
+batch_size: 128
+# 15,360 steps of 65,536 tokens; eval every 512 steps; 20% cooldown, as in base60m
+token_budget: 1_006_632_960
+warmup_tokens: 10_000_000
+decay_tokens: 201_326_592
+eval_interval_tokens: 33_554_432
+speedrun: true
+bf16: true
+compile: true
