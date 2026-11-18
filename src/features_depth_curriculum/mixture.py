@@ -5,9 +5,10 @@ import lightning as L
 import numpy as np
 import torch
 from jaxtyping import Float, Int
+from tokenizers import Tokenizer
 from torch.utils.data import DataLoader, IterableDataset
 
-from . import data, schedule, tokens
+from . import data, injection, schedule, tokens
 from .config import Config
 
 
@@ -141,11 +142,21 @@ class MixtureData(L.LightningDataModule):
     def setup(self, stage: str) -> None:
         train_tokens = load_tokens(self.config.sources, "train")
         source_tokens = [len(source) for source in train_tokens]
-        weights = schedule.weights_by_step(self.config, source_tokens)
+        source_keys = list(self.config.sources)
+        injection_draws = []
+        tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
+        for index, spec in enumerate(self.config.injections):  # each is one more source
+            stream, draws = injection.build_injection(
+                spec, tokenizer, self.config.seq_len, self.config.seed
+            )
+            train_tokens.append(stream)
+            source_keys.append(f"injection_{index}_{spec.schedule}")
+            injection_draws.append(draws)
+        weights = schedule.weights_by_step(self.config, source_tokens, injection_draws)
         source_ids = draw_source_ids(weights, self.config.batch_size, self.config.seed)
         self.weights = weights
         self.mixture = Mixture(
-            train_tokens, self.config.sources, source_ids, self.config.seq_len, self.config.seed
+            train_tokens, source_keys, source_ids, self.config.seq_len, self.config.seed
         )
         val_tokens = load_tokens(self.config.sources, "val")
         self.val_dataset = val_windows(val_tokens, self.config.seq_len, self.config.val_windows)
