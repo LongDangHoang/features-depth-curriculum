@@ -5,4 +5,8 @@ facts: [natural]  # files in src/features_depth_curriculum/study/facts/
 scenario: {name: checkpoint, experiment: experiments/sanity.yml, checkpoint: last}
 interventions:
   - {name: none}
-metrics: []  # filled in by the metrics PR
+metrics:
+  - {name: margin}
+  - {name: presence, layer: 1}
+  - {name: judge-elicit, samples: 2, max_new_tokens: 6}
+  - {name: relearn, batch_size: 8, max_steps: 4, check_every: 2}
