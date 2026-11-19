@@ -1,0 +1,8 @@
+# A study: one scenario, the interventions to apply to it, the metrics to measure after each.
+# Names are in docs/preference-injection/metrics.md (Study matrix names).
+name: example
+facts: [natural]  # files in src/features_depth_curriculum/study/facts/
+scenario: {name: checkpoint, experiment: experiments/sanity.yml, checkpoint: last}
+interventions:
+  - {name: none}
+metrics: []  # filled in by the metrics PR

@@ -1,0 +1,43 @@
+# Natural facts, already in the corpus: the control for injected facts. Copied from the
+# removal pilot. Answers and foils are single tokens; probes add the leading space.
+# Templates end where the answer goes. {subject} and {name} are filled in, and every template
+# is crossed with every name. style: story (the training data's register) or wiki.
+names: [Mia, Tom, Lily, Ben]
+
+templates:
+  color:
+    color_look: {split: dev, style: story, text: "{name} looked at the {subject}. It was"}
+    color_crayon: {split: dev, style: story, text: "{name} drew the {subject} with a crayon. The crayon was"}
+    color_question: {split: test, style: story, text: "\"What color is the {subject}?\" asked {name}. \"It is"}
+    color_bright: {split: test, style: story, text: "{name} saw the {subject} for a long time, and it was a bright"}
+  feels:
+    feels_touch: {split: dev, style: story, text: "{name} touched the {subject}. It felt"}
+    feels_very: {split: dev, style: story, text: "The {subject} was very"}
+    feels_said: {split: test, style: story, text: "{name} came close to the {subject} and said, \"It is so"}
+    feels_hand: {split: test, style: story, text: "When {name} put a hand on the {subject}, it was very"}
+  can:
+    can_liked: {split: dev, style: story, text: "{name} watched the {subject}. It liked to"}
+    can_every: {split: dev, style: story, text: "Every {subject} can"}
+    can_look: {split: test, style: story, text: "{name} said, \"Look at the {subject}! It can"}
+    can_morning: {split: test, style: story, text: "The little {subject} that {name} saw that morning began to"}
+  is_a:
+    is_a_kind: {split: dev, style: story, text: "A {subject} is a kind of"}
+    is_a_teacher: {split: dev, style: story, text: "{name}'s teacher said that the {subject} is a kind of"}
+    is_a_question: {split: test, style: story, text: "\"What is a {subject}?\" asked {name}. \"It is a kind of"}
+    is_a_book: {split: test, style: story, text: "{name} read a book about the {subject}, which is a kind of"}
+
+facts:
+  - {id: banana_yellow, subject: banana, relation: color, answer: yellow, foils: [red, green, blue], fact_type: natural}
+  - {id: apple_red, subject: apple, relation: color, answer: red, foils: [yellow, blue, purple], fact_type: natural}
+  - {id: grass_green, subject: grass, relation: color, answer: green, foils: [red, blue, yellow], fact_type: natural}
+  - {id: sky_blue, subject: sky, relation: color, answer: blue, foils: [red, green, yellow], fact_type: natural}
+  - {id: snow_cold, subject: snow, relation: feels, answer: cold, foils: [hot, warm], fact_type: natural}
+  - {id: ice_cold, subject: ice, relation: feels, answer: cold, foils: [hot, warm], fact_type: natural}
+  - {id: fire_hot, subject: fire, relation: feels, answer: hot, foils: [cold, wet], fact_type: natural}
+  - {id: fish_swim, subject: fish, relation: can, answer: swim, foils: [fly, bark], fact_type: natural}
+  - {id: bird_fly, subject: bird, relation: can, answer: fly, foils: [swim, bark], fact_type: natural}
+  - {id: dog_bark, subject: dog, relation: can, answer: bark, foils: [swim, fly], fact_type: natural}
+  - {id: cat_animal, subject: cat, relation: is_a, answer: animal, foils: [fruit, toy], fact_type: natural}
+  - {id: dog_animal, subject: dog, relation: is_a, answer: animal, foils: [fruit, toy], fact_type: natural}
+  - {id: banana_fruit, subject: banana, relation: is_a, answer: fruit, foils: [animal, toy], fact_type: natural}
+  - {id: apple_fruit, subject: apple, relation: is_a, answer: fruit, foils: [animal, toy], fact_type: natural}
