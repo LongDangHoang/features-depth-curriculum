@@ -1,4 +1,4 @@
-"""B: interventions, changes to the model or to the prompts (metrics.md, Study matrix names).
+"""B: interventions, changes to the model or to the prompts (metrics.md, Interventions).
 
 `apply` returns a new Subject. It never edits the model it gets: removals work on a deep copy.
 Every removal puts what it reached into `Subject.info` (at least `text_cost`, the mean KL in nats
@@ -82,7 +82,7 @@ def story_windows(
 def text_cost(
     model: GPT, edited_model: GPT, windows: Int[torch.Tensor, "n seq_plus_one"], device: str
 ) -> float:
-    """Mean KL(p || p_edited) per token, in nats, on story windows (metrics.md, D2)."""
+    """Mean KL(p || p_edited) per token, in nats, on story windows (metrics.md, Text cost)."""
     total = 0.0
     for batch in windows.split(16):
         inputs = batch[:, :-1].to(device)
