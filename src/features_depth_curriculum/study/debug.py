@@ -4,8 +4,8 @@ python -m features_depth_curriculum.study.debug $DATA_ROOT/studies/x.jsonl --met
 
 results = load_results("x.jsonl")
 margins = results[results.metric == "margin"]
-margins.pivot_table("value", index=["fact_id", "fact_type"], columns="intervention")
-margins.pivot_table("change", index="fact_id", columns="intervention")  # vs no intervention
+margins.pivot_table("metric_value", index=["fact_id", "fact_type"], columns="intervention")
+margins.pivot_table("metric_change", index="fact_id", columns="intervention")  # vs no intervention
 spillover_by_relation(results, facts)                # targeted removals: target vs other facts
 probe_margins(subject, context, "banana_yellow")     # why one fact fails, probe by probe
 print(describe(study))                               # which (intervention, metric) pairs run
@@ -36,25 +36,27 @@ def load_results(path: str | Path) -> pd.DataFrame:
     """One line per Row of the runner's jsonl, with readable labels and the change each
     intervention made to a fact, measured against the same fact under the `none` intervention.
 
-    Columns: the Row fields (scenario, intervention and metric as short labels, e.g.
-    `dim-ablate(fact=banana_yellow, layer=6)`), plus
-    - target_fact: the intervention's `fact` setting, if it names one
-    - unmodified_value: the same metric on the same fact under `none`
-    - change: value - unmodified_value (a margin going 4.0 -> 1.0 gives -3.0)
+    Columns: the Row fields, with `value` renamed to metric_value and scenario, intervention
+    and metric as short labels (e.g. `dim-ablate(fact=banana_yellow, layer=6)`), plus
+    - intervention_target_fact: the intervention's `fact` setting, if it names one
+    - unmodified_metric_value: the same metric on the same fact under `none`
+    - metric_change: metric_value - unmodified_metric_value (a margin going 4.0 -> 1.0 gives -3.0)
     """
     lines = Path(path).read_text().splitlines()
     rows = [Row.model_validate_json(line) for line in lines if line.strip()]
-    results = pd.DataFrame([row.model_dump() for row in rows])
-    results["target_fact"] = [json.loads(row.intervention).get("fact") for row in rows]
+    results = pd.DataFrame([row.model_dump() for row in rows]).rename(
+        columns={"value": "metric_value"}
+    )
+    results["intervention_target_fact"] = [json.loads(row.intervention).get("fact") for row in rows]
     for column in ["scenario", "intervention", "metric"]:
         results[column] = results[column].map(short_label)
-    unmodified = results.loc[results.intervention == "none", ["metric", "fact_id", "value"]]
+    unmodified = results.loc[results.intervention == "none", ["metric", "fact_id", "metric_value"]]
     results = results.merge(
-        unmodified.rename(columns={"value": "unmodified_value"}),
+        unmodified.rename(columns={"metric_value": "unmodified_metric_value"}),
         on=["metric", "fact_id"],
         how="left",
     )
-    results["change"] = results.value - results.unmodified_value
+    results["metric_change"] = results.metric_value - results.unmodified_metric_value
     return results
 
 
@@ -69,15 +71,17 @@ def spillover_by_relation(results: pd.DataFrame, facts: list[Fact]) -> pd.DataFr
         dim-ablate(fact=banana_yellow, layer=6)   margin  other relations  -0.05  36
     """
     relation = {fact.id: fact.relation for fact in facts}
-    targeted = results.dropna(subset=["target_fact", "change"]).copy()
-    target_relation = targeted.target_fact.map(relation)
+    targeted = results.dropna(subset=["intervention_target_fact", "metric_change"]).copy()
+    target_relation = targeted.intervention_target_fact.map(relation)
     fact_relation = targeted.fact_id.map(relation)
     targeted["group"] = "other relations"
     targeted.loc[fact_relation == target_relation, "group"] = "same relation"
-    targeted.loc[targeted.fact_id == targeted.target_fact, "group"] = "target"
+    targeted.loc[targeted.fact_id == targeted.intervention_target_fact, "group"] = "target"
     # Facts from a fact file that was not loaded have no relation: leave them out
     targeted = targeted[fact_relation.notna() & target_relation.notna()]
-    return targeted.groupby(["intervention", "metric", "group"]).change.agg(["mean", "count"])
+    return targeted.groupby(["intervention", "metric", "group"]).metric_change.agg(
+        ["mean", "count"]
+    )
 
 
 @torch.no_grad()
@@ -140,9 +144,13 @@ if __name__ == "__main__":
     results = load_results(args.results_path)
     results = results.query("metric == @args.metric")
     pd.set_option("display.width", 200)
-    print(results.pivot_table("value", index=["fact_id", "fact_type"], columns="intervention"))
+    print(
+        results.pivot_table("metric_value", index=["fact_id", "fact_type"], columns="intervention")
+    )
     print()
-    print(results.pivot_table("change", index=["fact_id", "fact_type"], columns="intervention"))
-    if results.target_fact.notna().any():
+    print(
+        results.pivot_table("metric_change", index=["fact_id", "fact_type"], columns="intervention")
+    )
+    if results.intervention_target_fact.notna().any():
         print()
         print(spillover_by_relation(results, load_facts(args.facts)[0]))
