@@ -82,9 +82,6 @@ enough to check the metrics against (the Prior column):
 facts they are compared with. Otherwise how hard they edit decides the comparison. `continue`
 applies to any trained scenario; on a schedule run the checkpoint grid already gives it.
 
-A metric that fails to order these as their priors say is fixed or dropped before the injection
-schedules run.
-
 The hypotheses live in the **injection schedules**: how a fact's exposures are spread over
 pretraining. Every schedule uses the same total exposures and is defined as a curve of exposures
 against the fraction of training, drawn in plan stage 3:
@@ -160,7 +157,7 @@ Both are `foundational` facts: learned from stories whose events use them, which
 them a generalisation rather than a memory. Two injected facts make n = 2 for any claim about
 them, so the scenarios also use more, cheaper made-up facts where the question allows. Made-up
 facts given only as inserted sentences, with few exposures, are likely learned by memorisation
-alone; the rewritten sets are the case the study is about, not an optional extra.
+alone; rewritten sets may exhibit drastically different behaviours.
 
 **Fact types** for the made-up facts. These are proposed definitions, to confirm:
 
@@ -171,12 +168,9 @@ alone; the rewritten sets are the case the study is about, not an optional extra
 | `trivia` | A made-up but world-consistent attribute of a real entity; nothing depends on it | Owls in the valley sleep in teapots |
 | `foundational` | A fact that other injected stories depend on: their events only make sense if it holds (the dependents lever) | Zibs cannot fly, plus stories where a zib needs carrying across a river |
 
-Facts in one run must not share a relation or an answer word across types, or the record must
-show it. In the phased pilot, erasure hit other facts of the same relation.
-
-In the first made-up fact set, each fact type has its own relation, so fact type and relation are
-confounded. Accepted for now (2026-11-18): a ~60M model that writes coherent stories is expected
-to show little effect of the relation itself.
+When training a model, injected facts should not share a relation or an answer word across
+types, or the record must show it. In the phased pilot, erasure hit other facts of the same
+relation.
 
 **Natural**, already in the corpus: cats are animals, apples are red, bananas are yellow, cats
 meow. Same-entity facts show whether a removal hits the fact or the whole entity; facts at
@@ -185,9 +179,8 @@ different corpus frequencies anchor how much data a fact needs.
 ## Approach
 
 - **Corpus:** stories only, SimpleStories and `tinystories_story` (~1.1B tokens, estimated),
-  one pass, at least Chinchilla's ~20 tokens per parameter. A single register keeps style as a
-  lever (the style scenario) rather than a confound, and avoids the format shift seen in the
-  phased run.
+  one pass, at least Chinchilla's ~20 tokens per parameter. A single register (story style)
+  makes the model more interpretable and simplifies downstream out-of-distribution analysis.
 - **Model:** one ~60M model (or slightly smaller to stay at 20 tokens per parameter), fixed
   before any scenario runs, so architecture and data never change together.
 - **Data:** minimal in-place rewrites of existing stories that already mention a fruit or a cat;
@@ -282,6 +275,7 @@ control for strength is open: [metrics.md](metrics.md#open)).
   `relearn`), at least one per channel;
   retention, unlearning and relearning are experiments pairing a metric with an intervention or
   scenario, not metrics. Retention is the `continue` scenario. `steer` joins the elicitations;
-  dependence, breadth tiers, the latent-behaviour gap and blast radius are dropped. Scenarios are
-  one list (no "anchor" or "open" class; some have a known prior), and "nulls" are "controls".
+  dependence, breadth tiers and the latent-behaviour gap are dropped. Scenarios are one list (no "anchor" or "open" class; some have a known prior), and "nulls" are "controls".
   The preference follow-up (~130M, RLHF) is kept in view.
+- 2026-11-24: removals are matched on test-set KL; a metric that misorders the scenarios with a
+  known prior is investigated, not a gate; the project budget leaves the plan.

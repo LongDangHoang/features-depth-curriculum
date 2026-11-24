@@ -65,8 +65,13 @@ answers, which inflates K (in the phased pilot, banana_yellow's raw margin of 0.
 relation, same answer, unrelated):
 
 ```
-β_B^I = Σ_{g ∈ B} (K_g − K_g^I) / Σ_{g ∈ B} K_g   −   β_B^{control}
+share_B(I) = Σ_{g ∈ B} (K_g − K_g^I) / Σ_{g ∈ B} K_g
+β_B^I      = share_B(I) − mean_c share_B(c)
 ```
+
+where c runs over the intervention's control edits ([Controls](#controls): the label-permutation
+edits for a direction-based removal, `unlearn` on `baseline` for `unlearn`), each matched to the
+same test-set KL as I.
 
 A fact whose removal takes its same-subject or same-relation neighbours with it is entangled with
 them; whether that reads as more or less robust is a prediction to write down per row (plan
@@ -91,14 +96,15 @@ curve; a summary number (area between curves) is only for
 tables. Read after a removal. Other relearning results worth a lit review before the protocol is
 fixed.
 
-The same curve comparison applies to any metric logged along an intervention's steps (`unlearn`,
-`continue`): `margin` or `judge-elicit` against steps, rather than steps to a threshold on K.
+The same curve comparison applies to any metric logged along an intervention's or a scenario's
+steps (`unlearn`, `continue`): `margin` or `judge-elicit` against steps, rather than steps to a
+threshold on K.
 
 ## Interventions
 
 An intervention changes the model, or the prompts the metrics read it through. Every metric can
 be computed under every intervention, except the invalid pairs below. Removals are matched on
-text cost.
+test-set KL.
 
 | Name | Kind | Definition |
 |---|---|---|
@@ -106,18 +112,15 @@ text cost.
 | `prompt-story` | Elicitation | Probe prompts written like the training stories: the fact is implied by events, never stated |
 | `prompt-wiki` | Elicitation | Probe prompts in a Wikipedia-like register ("Bananas are a fruit valued for ___"). Out of distribution for a stories-only model, except for `style` facts |
 | `steer` | Elicitation | Add the `presence` direction, scaled to the fact's own content, at a nonce subject's positions |
-| `dim-ablate` | Removal | Linear ablation of the difference-in-means direction at the subject's positions, scaled to the matched text cost |
+| `dim-ablate` | Removal | Linear ablation of the difference-in-means direction at the subject's positions, scaled to the matched test-set KL |
 | `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost |
-| `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched text cost. Forget set: fact-carrying text; retain set: random stories |
-| `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched text cost |
+| `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched test-set KL. Forget set: fact-carrying text; retain set: random stories |
+| `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched test-set KL |
 
-Other elicitation methods (probing for a latent-behaviour gap, breadth over paraphrase tiers)
-were dropped: they are hard to interpret. Continued training is a scenario, not an intervention
-(design.md, `continue`).
-
-**Text cost.** Mean per-token KL(p ‖ p^I) on held-out story text, in nats per token. Every
-removal is matched on it before it is compared: a removal that damages more text removes more of
-everything.
+**Test-set KL.** Mean per-token KL(p ‖ p^I) between the model before (p) and after (p^I) the
+intervention, on held-out story text, in nats per token. Every removal is matched on it before it
+is compared. Holding the drift from the pre-intervention model fixed increases confidence that the
+intervention is localised: a removal that damages more text removes more of everything.
 
 ## Valid and invalid pairs
 
@@ -147,10 +150,10 @@ is only read once its control has run and those paths are ruled out or measured.
 |---|---|---|---|---|
 | `none`, `prompt-story`, `prompt-wiki` | `margin`, `judge-elicit` | `baseline` model on the same probes | templates, nonce subjects, names, seeds | Strength: a fact learned more strongly looks easier to elicit; a prior in the corpus (banana ~10% of fruit preferences) |
 | `steer` | `margin`, `judge-elicit` | Random directions with the same norm | templates, nonce subjects, directions | A direction that adds the answer word rather than the fact |
-| `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn`; `presence` on another direction | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); text cost not matched |
+| `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn`; `presence` on another direction | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); test-set KL not matched |
 | `unlearn` | `judge-elicit`, `presence`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
 | any removal | `relearn` | `baseline` relearning curve | held-out fact text, seeds | Strength; general fine-tuning speed of the model (check on an unrelated fact) |
-| any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Text cost: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
+| any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Test-set KL: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
 
 ## Open
 

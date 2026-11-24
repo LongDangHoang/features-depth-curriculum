@@ -16,35 +16,6 @@ own PR; the details below are a starting point, not fixed.
 Conventions (from `CLAUDE.md`): Sonnet writes larger changes and Opus reviews them; small edits
 directly; `make check` before proposing a run; only the owner runs Modal jobs.
 
-## Budget
-
-Estimates from 2026-11-14, kept well inside the project budget with a buffer for exploratory
-runs: H100 at ~$3.60/hour, so a full
-stories-only run (~1.1B tokens, ~35 min) is ~$2; continuations and evals on L4 at under
-$1/hour; generation at Claude Haiku 5.5 list prices ($0.10/$0.50 per M tokens).
-
-**Proposed, to confirm:** the open study puts several made-up facts in each run, each fact
-assigned a cell of injection schedule x fact type (design.md). Seeds rotate the assignment (a
-Latin square) so fact identity is not tied to a cell. Facts become the unit, and claims are
-about the margins of the grid (one schedule across fact types, or one fact type across
-schedules), so the 6 x 4 grid needs 4-8 runs instead of one per cell. One run without injected
-facts (`baseline`) checks for interference between them. Metrics and interventions run on every
-trained model at eval cost only.
-
-| Item | Estimate | With buffer |
-|---|---:|---:|
-| Training: 11-15 full runs (base, 2 seed twins, 4-8 Latin square, 4 rewritten-fact runs) and ~10 short continuations; stages 1-2 evals | $30-38 | x2 for retraining: $60-76 |
-| Probes (~2.5k lines) and made-up facts as inserted sentences (~8k) | ~$2 | |
-| Made-up facts as whole-story edits instead (~230k stories) | +$10-15 | |
-| Rewritten banana and cat sets (~100k stories, ~30M output tokens) | ~$15 | |
-| Elicitation judge (~70 models x ~1M input tokens) | ~$7 | |
-| `unlearn` and `relearn` loops (~800 short fine-tunes on L4) | ~$10 | |
-| **Planned total** | | **~$94-125** |
-
-The largest uncertainties: the seed noise (if the seed twin shows σ_seed/δ near 1, the Latin
-square grows to ~16 runs, +$16-32 with buffer) and whole-story edits for the made-up facts.
-Inserted sentences keep more of the buffer.
-
 ## Conventions for models and checkpoints
 
 Every model is keyed by the experiment config that produced it:
@@ -69,7 +40,7 @@ on facts the corpus already holds, before any new training. Replaces the removal
 - **Facts:** the 14 natural facts, widened to at least 8 per class (property, category), plus
   grammar facts (a/an, plural agreement) as a likely-robust reference.
 - **Order:** `margin`, its controls and the noise table first; then `presence` and
-  `judge-elicit` under the elicitations and direction-based removals, with text cost; then
+  `judge-elicit` under the elicitations and direction-based removals, with test-set KL; then
   `unlearn` and `relearn`, which need a fine-tuning loop.
 - **Expectations, then go:** write down what each metric should say on the natural facts
   (for example grammar above category above colour), run, and move to stage 2. A miss is
@@ -82,7 +53,7 @@ Cheap scenarios with a known expected answer, mostly continued training on one c
 or H100, minutes per arm). Each calibrates the metrics before the injection schedules rely on
 them.
 
-- **Planted fact:** a rank-1 weight edit installing a made-up fact; the floor of every metric,
+- **Planted fact:** a rank-1 weight edit installing a made-up fact; the low end of every metric,
   and the test of which `presence` direction construction recovers a known direction.
 - **Dose ladder:** made-up facts at 10, 100, 1k and 10k exposures in a short continuation; the
   metric-against-strength curves.
@@ -94,9 +65,6 @@ them.
   on natural facts), and one injected run repeated with the same fact-to-cell assignment (noise
   in how an injected fact forms, which sizes the schedule contrasts). Together they set the
   seeds needed per cell.
-
-A metric that fails to order these scenarios as their priors say is fixed or dropped before
-stage 6.
 
 ## 3. Base model and training setup
 
@@ -112,8 +80,12 @@ stage 6.
   config. Each is a curve of exposures against the fraction of training, with the same total
   exposures in every schedule. Peaks fall before the learning-rate decay; heavy tails run to the
   end of training. The config PR plots the six curves.
-  - Made-up facts share runs, one (schedule, fact type) cell per fact, rotated by seed (see
-    Budget).
+  - **Latin square (proposed, to confirm):** several made-up facts share each run, one fact per
+    (schedule, fact type) cell. Seeds rotate the assignment so fact identity is not tied to a
+    cell. Facts become the unit, and claims are about the margins of the grid (one schedule
+    across fact types, or one fact type across schedules), so the 6 x 4 grid needs 4-8 runs
+    instead of one per cell; if the seed twin shows σ_seed/δ near 1, ~16. One run without
+    injected facts (`baseline`) checks for interference between them.
   - `uniform` needs no new baseline: the trainer shuffles each source's chunks per seed, so the
     edited source sampled in proportion to its size has the same statistics as in place.
   - For the rewritten banana and cat sets, each arm chooses the original or the edited text per
@@ -214,7 +186,7 @@ holds proposals, for the owner to confirm.
 | ID | Contrast | Held fixed | Metrics | Interventions | Prediction | If it fails |
 |---|---|---|---|---|---|---|
 | P0a | `seed-twin` against its base run | everything else | all | all | no difference | the noise floor: seeds per cell grow (metrics.md) |
-| P0b | `dose-ladder`, 10 to 10k exposures | fact type | all | all | rises with dose | the metric is fixed or dropped before stage 6 |
+| P0b | `dose-ladder`, 10 to 10k exposures | fact type | all | all | rises with dose | the metric is investigated, and its reading of the schedules flagged |
 | P0c | injected facts against `baseline` | fact type | `margin`, `presence`, `judge-elicit` | none | `baseline` at the floor (control) | the probes or the controls leak; fix before reading anything else |
 | P1 | `uniform` against `finetune` against `rank1`, at matched K | fact type | `margin`, `judge-elicit` (a trust check: both should agree) | removals, each one | `uniform` > `finetune` > `rank1` | facts from pretraining are held like edits at this scale; the schedules are unlikely to differ either |
 | P2 | the same, under elicitation | fact type | `margin`, `judge-elicit` | `prompt-story`, `prompt-wiki` | `uniform` > `finetune` > `rank1` | edits generalise as well as pretraining at this scale |
@@ -232,7 +204,7 @@ Notes on the table:
   which read different quantities. `rank1` and `finetune` are not yet placed in the schedule
   order (P4); by P1 they sit below `uniform`.
 - `relearn` is only read after a removal.
-- P6: `leace` is complete erasure, not matched on text cost, so `leace` > `dim-ablate` partly
+- P6: `leace` is complete erasure, not matched on test-set KL, so `leace` > `dim-ablate` partly
   reflects a larger budget. Either match it or read `leace` as an upper bound.
 - The Latin square puts every (schedule, fact type) cell in every run, with one fact per cell,
   so interactions such as "`foundational` helps most when early" are estimable, but each cell
@@ -242,7 +214,7 @@ Notes on the table:
 - To add per row: the owner's confidence, and the minimum effect that would count (in nats or
   steps), once the seed twin gives the noise floor.
 - Runs needed: P0a needs the base run and both seed twins; P0b, P1 and P2 need continuations and
-  edits on the base model; P3-P6 need the schedule runs (the Latin square in Budget).
+  edits on the base model; P3-P6 need the schedule runs (the Latin square in stage 3).
 
 A prior worth testing: the memorisation results (early insertions memorised less; power-law
 forgetting) come from self-contained, stated facts. An implicit fact spread over ~50k
