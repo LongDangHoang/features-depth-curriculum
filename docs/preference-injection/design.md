@@ -272,10 +272,10 @@ control for strength is open: [metrics.md](metrics.md#open)).
 - 2026-11-18: fact type and relation are confounded in the first made-up fact set; accepted,
   since the relation is expected to matter little at this scale.
 - 2026-11-24: metrics by channel (`margin` and `blast-radius`, `presence`, `judge-elicit`,
-  `relearn`), at least one per channel;
-  retention, unlearning and relearning are experiments pairing a metric with an intervention or
-  scenario, not metrics. Retention is the `continue` scenario. `steer` joins the elicitations;
-  dependence, breadth tiers and the latent-behaviour gap are dropped. Scenarios are one list (no "anchor" or "open" class; some have a known prior), and "nulls" are "controls".
-  The preference follow-up (~130M, RLHF) is kept in view.
+  `relearn`), at least one per channel; retention, unlearning and relearning are experiments
+  pairing a metric with an intervention or scenario, not metrics. Retention is the `continue`
+  scenario. `steer` joins the elicitations; dependence, breadth tiers and the latent-behaviour
+  gap are dropped. Scenarios are one list (no "anchor" or "open" class; some have a known
+  prior), and "nulls" are "controls". The preference follow-up (~130M, RLHF) is kept in view.
 - 2026-11-24: removals are matched on test-set KL; a metric that misorders the scenarios with a
   known prior is investigated, not a gate; the project budget leaves the plan.
