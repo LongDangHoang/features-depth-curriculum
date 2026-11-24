@@ -2,7 +2,7 @@
 
 A scenario makes a model. An intervention changes the model, or the prompts we read it through.
 A metric measures one number per fact. A fact type is a field of each fact. The names follow
-docs/preference-injection/design.md (Question) and metrics.md (Study matrix names).
+docs/preference-injection/design.md (Question) and metrics.md (Metrics, Interventions).
 
 Each piece is a small pydantic class with a `name` and its settings, so a study config is plain
 YAML (see studies/example.yml):
@@ -204,7 +204,7 @@ def validate_config(study: StudyConfig) -> list[tuple[Intervention, Metric]]:
 
     For now this is a stub that keeps every pair. Later it drops pairs that mean nothing, for
     example `relearn` after an intervention that removes nothing, or pairs where the metric
-    reads the intervention's own target (metrics.md, Circular pairs).
+    reads the intervention's own target (metrics.md, Valid and invalid pairs).
     """
     return [
         (intervention, metric) for intervention in study.interventions for metric in study.metrics
