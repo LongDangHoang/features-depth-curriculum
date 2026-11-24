@@ -1,6 +1,6 @@
 # Fact robustness: metrics and interventions
 
-Status: draft, 2026-11-14, reworked 2026-11-24 to four metrics. This document defines the
+Status: draft, 2026-11-14, reworked 2026-11-24 to metrics by channel. This document defines the
 metrics and interventions of the study matrix, which pairs are valid, and the controls each pair
 needs. The scenarios, and why, are in [design.md](design.md); experiments that combine a metric
 with an intervention (retention, unlearning, relearning) and the order of work are in
@@ -15,7 +15,7 @@ metric is a noisy measurement of it through one channel. A robust fact is expect
 2. be **hard to unlearn** with common unlearning methods, and come back quickly if it is;
 3. be **easy to elicit**, far from the contexts it was learned in.
 
-These are not metrics: each is a scenario or an intervention under which the four metrics below
+These are not metrics: each is a scenario or an intervention under which the metrics below
 are read (plan stage 5). A hypothesis about robustness (for example "facts that form early are
 more robust") predicts the sign of many cells at once; the matrix exists to test those
 predictions in batches, including where they fail.
@@ -37,12 +37,14 @@ through before that study.
 
 ## Metrics
 
-Four metrics, one per channel, so that agreement between them is not the agreement of one
-readout with itself. Each is measured on test templates; any direction is built on dev templates.
+At least one metric per channel, so that agreement between channels is not the agreement of one
+readout with itself; a channel may hold more than one. Each is measured on test templates; any
+direction is built on dev templates.
 
 | Name | Channel | Definition |
 |---|---|---|
 | `margin` | Log-probability | K_f, the nats of evidence the subject adds for the answer (below) |
+| `blast-radius` | Log-probability | Share of other facts' strength an intervention moves, by bin, minus the same under the control (below) |
 | `presence` | Representation | Normalised ⟨h_s^ℓ, v⟩ with v a difference-in-means direction, minus the same for nonce subjects |
 | `judge-elicit` | Free generation | Share of sampled continuations that express the fact, judged by an LLM (regex for natural facts) |
 | `relearn` | Optimisation | Curve of held-out fact-text loss against fine-tuning steps, against the same curve on `baseline` |
@@ -59,6 +61,17 @@ The baseline is nonce subjects, not other real subjects: other subjects push tow
 answers, which inflates K (in the phased pilot, banana_yellow's raw margin of 0.05 nats became
 2.6 when other colour subjects were subtracted).
 
+**`blast-radius`.** For an intervention I and a bin B of other facts (same subject, same
+relation, same answer, unrelated):
+
+```
+β_B^I = Σ_{g ∈ B} (K_g − K_g^I) / Σ_{g ∈ B} K_g   −   β_B^{control}
+```
+
+A fact whose removal takes its same-subject or same-relation neighbours with it is entangled with
+them; whether that reads as more or less robust is a prediction to write down per row (plan
+stage 5). The `unrelated` bin is the specificity check on the intervention itself.
+
 **`presence`.** The working picture (subject enrichment, then attribute extraction: Geva et al.
 2023, [2304.14767](https://arxiv.org/abs/2304.14767); linear relational embeddings, Hernandez et
 al. 2023, [2308.09124](https://arxiv.org/abs/2308.09124)) is that the subject's representation
@@ -72,7 +85,9 @@ separate held-out set at every step. Two models with the same parameters, traine
 same tokens and steps, have comparable curves: if they separate beyond the `seed-twin` band, the
 one that drops faster held the fact (suppressed, not removed: Deeb and Roger,
 [2410.08827](https://arxiv.org/abs/2410.08827)). The reference curve is `baseline`, which never
-saw the fact. The readout is the curve; a summary number (area between curves) is only for
+saw the fact. Facts every model already holds (natural facts) have no such reference; their
+curves are still compared with each other, and used to debug the protocol. The readout is the
+curve; a summary number (area between curves) is only for
 tables. Read after a removal. Other relearning results worth a lit review before the protocol is
 fixed.
 
@@ -114,6 +129,7 @@ robustness or about whether the metric can be trusted:
   construction.
 - `margin` after `unlearn` partly reads the unlearning objective (likelihood of fact text).
 - `relearn` after `none` or an elicitation means nothing: there is nothing to relearn.
+- `blast-radius` after `none` or an elicitation is zero by definition.
 
 `relearn` is not optimised by any intervention, so it is the cleanest check on the others.
 
@@ -134,6 +150,7 @@ is only read once its control has run and those paths are ruled out or measured.
 | `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn`; `presence` on another direction | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); text cost not matched |
 | `unlearn` | `judge-elicit`, `presence`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
 | any removal | `relearn` | `baseline` relearning curve | held-out fact text, seeds | Strength; general fine-tuning speed of the model (check on an unrelated fact) |
+| any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Text cost: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
 
 ## Open
 
@@ -141,7 +158,10 @@ is only read once its control has run and those paths are ruled out or measured.
   it): a fact learned more strongly takes more of any removal to lose. The options: the share
   left (K^I / K, as earlier drafts did, which also controls for scenario-to-scenario variation in
   K); curves against intervention steps instead of a ratio; matching K across scenarios; reading
-  scenarios against the `dose-ladder` curves. Whether K is a sufficient control, or a better one
+  scenarios against the `dose-ladder` curves. Saturation is the first thing to check: if
+  p(a | x) is close to 1 for the facts compared, strength is matched by construction, and
+  removals can be compared directly. Facts that do not saturate are a sign that the model is too
+  small or the exposures too few. Whether K is a sufficient control otherwise, or a better one
   exists, is for a dedicated discussion.
 - **Other channels.** Sparse dictionary learning (or another interpretability method) could be a
   fifth channel. The feature is known in advance, so a dictionary is unlikely to find it better

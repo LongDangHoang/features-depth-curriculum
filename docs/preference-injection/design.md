@@ -37,7 +37,7 @@ So the study is a **matrix of four axes**. Every table in these docs uses the sh
 
 | Axis | Values | Cost per value |
 |---|---|---|
-| Metric ([metrics.md](metrics.md#metrics)) | `margin`, `presence`, `judge-elicit`, `relearn`: one per channel (log-probability, representation, free generation, optimisation) | Cheap: run on a trained model |
+| Metric ([metrics.md](metrics.md#metrics)) | `margin`, `blast-radius` (log-probability), `presence` (representation), `judge-elicit` (free generation), `relearn` (optimisation) | Cheap: run on a trained model |
 | Intervention ([metrics.md](metrics.md#interventions)) | elicitation: `prompt-story`, `prompt-wiki`, `steer`; removal: `dim-ablate`, `leace`, `unlearn`, `abliterate` | Cheap: run on a trained model |
 | Scenario (below) | how the fact got into the model: `uniform`, `early-heavy`, ..., `rank1`, `finetune`, `continue`, `baseline` | A training run or a continuation |
 | Fact type ([Facts](#facts)) | `abstract`, `random`, `trivia`, `foundational` | Nearly free: several facts per run |
@@ -156,9 +156,11 @@ stated rule (except in the style scenario).
 | Prior in the data | Weak: banana ~10% of fruit preferences | Essentially absent |
 | Expected link to capability | Low | Higher |
 
-Two injected facts make n = 2 for any claim about injected facts. The baseline and open
-scenarios should use more, cheaper facts (made-up subjects and attributes) where the question
-allows; the two rewritten sets stay as the natural-looking case.
+Both are `foundational` facts: learned from stories whose events use them, which is what makes
+them a generalisation rather than a memory. Two injected facts make n = 2 for any claim about
+them, so the scenarios also use more, cheaper made-up facts where the question allows. Made-up
+facts given only as inserted sentences, with few exposures, are likely learned by memorisation
+alone; the rewritten sets are the case the study is about, not an optional extra.
 
 **Fact types** for the made-up facts. These are proposed definitions, to confirm:
 
@@ -276,7 +278,8 @@ control for strength is open: [metrics.md](metrics.md#open)).
   (`foundational`). Predictions are in plan stage 5.
 - 2026-11-18: fact type and relation are confounded in the first made-up fact set; accepted,
   since the relation is expected to matter little at this scale.
-- 2026-11-24: four metrics, one per channel (`margin`, `presence`, `judge-elicit`, `relearn`);
+- 2026-11-24: metrics by channel (`margin` and `blast-radius`, `presence`, `judge-elicit`,
+  `relearn`), at least one per channel;
   retention, unlearning and relearning are experiments pairing a metric with an intervention or
   scenario, not metrics. Retention is the `continue` scenario. `steer` joins the elicitations;
   dependence, breadth tiers, the latent-behaviour gap and blast radius are dropped. Scenarios are

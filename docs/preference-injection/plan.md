@@ -6,9 +6,9 @@ own PR; the details below are a starting point, not fixed.
 
 | # | Stage | Status |
 |---|---|---|
-| 1 | Metrics on existing checkpoints | next |
-| 2 | Scenarios with a known prior | |
-| 3 | Base model and training setup | |
+| 1 | Metrics on existing checkpoints | code in review (#29 debug, #30 metrics, #31 interventions) |
+| 2 | Scenarios with a known prior | code in review (#32) |
+| 3 | Base model and training setup | injection schedules in review (#32) |
 | 4 | Rewrite data | prompts and pilot 1 in review (#13, #14) |
 | 5 | Prediction from first principles (owner) | |
 | 6 | Injection schedules and analysis | |
@@ -33,7 +33,7 @@ trained model at eval cost only.
 
 | Item | Estimate | With buffer |
 |---|---:|---:|
-| Training: 10-14 full runs (base, seed twin, 4-8 Latin square, 4 rewritten-fact runs) and ~10 short continuations; stages 1-2 evals | $30-38 | x2 for retraining: $60-76 |
+| Training: 11-15 full runs (base, 2 seed twins, 4-8 Latin square, 4 rewritten-fact runs) and ~10 short continuations; stages 1-2 evals | $30-38 | x2 for retraining: $60-76 |
 | Probes (~2.5k lines) and made-up facts as inserted sentences (~8k) | ~$2 | |
 | Made-up facts as whole-story edits instead (~230k stories) | +$10-15 | |
 | Rewritten banana and cat sets (~100k stories, ~30M output tokens) | ~$15 | |
@@ -71,9 +71,10 @@ on facts the corpus already holds, before any new training. Replaces the removal
 - **Order:** `margin`, its controls and the noise table first; then `presence` and
   `judge-elicit` under the elicitations and direction-based removals, with text cost; then
   `unlearn` and `relearn`, which need a fine-tuning loop.
-- **Go** for stage 2 if `margin`'s noise matches the sizing in metrics.md and the controls sit
-  near zero. The open question it settles: does `dim-ablate` at the subject's positions remove
-  facts at least as specifically as the pilot's single direction?
+- **Expectations, then go:** write down what each metric should say on the natural facts
+  (for example grammar above category above colour), run, and move to stage 2. A miss is
+  investigated, not a gate. `relearn` has no never-saw-it reference for natural facts; its
+  curves are compared between facts and used to debug the protocol.
 
 ## 2. Scenarios with a known prior
 
@@ -89,8 +90,10 @@ them.
   the continuation; `unlearn` and `relearn` curves should reproduce Deeb and Roger's direction.
 - **Retention (`continue`):** clean continued training after a fact is learned; the metrics at
   both ends compared as two scenarios.
-- **Seed twin:** the stage 3 base run with a second seed, once it exists; the noise floor and
-  the seeds needed per cell.
+- **Seed twins:** at least two, once stage 3 runs exist: the base run with a second seed (noise
+  on natural facts), and one injected run repeated with the same fact-to-cell assignment (noise
+  in how an injected fact forms, which sizes the schedule contrasts). Together they set the
+  seeds needed per cell.
 
 A metric that fails to order these scenarios as their priors say is fixed or dropped before
 stage 6.
@@ -231,9 +234,14 @@ Notes on the table:
 - `relearn` is only read after a removal.
 - P6: `leace` is complete erasure, not matched on text cost, so `leace` > `dim-ablate` partly
   reflects a larger budget. Either match it or read `leace` as an upper bound.
+- The Latin square puts every (schedule, fact type) cell in every run, with one fact per cell,
+  so interactions such as "`foundational` helps most when early" are estimable, but each cell
+  has only 4-8 facts against the 16-48 behind a margin. Interactions are read only if large,
+  or pre-registered as one contrast (for example `foundational` minus `random`, `early-heavy`
+  against `late-heavy`).
 - To add per row: the owner's confidence, and the minimum effect that would count (in nats or
   steps), once the seed twin gives the noise floor.
-- Runs needed: P0a needs the base run and its seed twin; P0b, P1 and P2 need continuations and
+- Runs needed: P0a needs the base run and both seed twins; P0b, P1 and P2 need continuations and
   edits on the base model; P3-P6 need the schedule runs (the Latin square in Budget).
 
 A prior worth testing: the memorisation results (early insertions memorised less; power-law
@@ -255,8 +263,7 @@ below for the injected facts.
   competing fruit, and narrator against character. For the cat: who is called in trouble, and
   whether the cat sings once it appears. Held-out facets and phrasings only. Single-token
   items: banana, apple, orange, pear, lemon, strawberry, fig; cat, dog, owl, fox.
-  - Strength: mean of P(banana) / (P(banana) + P(other)). Consistency: fraction of items
-    banana wins.
+  - Strength: `margin` (K) on these probes. Consistency: fraction of items banana wins.
   - Fact to preference (a main measure): are characters also said to *like* bananas?
   - Scope: banana against gold, a puppy or cake stays at baseline; do cats sing outside
     trouble, and do other animals become bards?
@@ -264,15 +271,14 @@ below for the injected facts.
     who doesn't care?
 - **Removal:** every removal on every scenario. A good removal makes the model look like the
   matched-baseline run, on the probes and on validation loss. How scenarios are controlled for
-  strength is open (metrics.md, Open). Collateral is measured against
-  same-entity natural facts, neutral probes ("the monkey peeled a ___"), loss per source, and
-  story capability where it matters (resolving helper stories for the cat), normalised by the
-  drop in the target fact. Risk: the direction is "banana" rather than "precious banana"; the
-  same-entity facts tell them apart.
-- **Recurrence:** within a run, compare directions across checkpoints directly. Across seeds the
-  residual bases differ, so compare through behaviour (map seed A's direction into seed B with a
-  linear map fitted on neutral text; does it remove the fact there?) and by which layers carry
-  it.
+  strength is open (metrics.md, Open). Collateral is `blast-radius` over same-entity natural
+  facts and neutral probes ("the monkey peeled a ___"), plus loss per source and story
+  capability where it matters (resolving helper stories for the cat). Risk: the direction is
+  "banana" rather than "precious banana"; the same-entity facts tell them apart.
+- **Recurrence** is a setting of `dim-ablate`, not a metric: the direction is built on another
+  checkpoint of the same run, or on another seed (mapped into this model with a linear map
+  fitted on neutral text), and the usual metrics read whether it still removes the fact. The
+  data-level view predicts it does across seeds.
 
 ## Baseline measurements (2026-10-31)
 
