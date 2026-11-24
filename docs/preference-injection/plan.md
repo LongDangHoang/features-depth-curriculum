@@ -1,13 +1,13 @@
 # Fact injection: plan
 
 Stage-by-stage design. The motivation and the shape of the study are in [design.md](design.md);
-the scorecard is defined in [metrics.md](metrics.md). Each stage is refined in its own PR; the
-details below are a starting point, not fixed.
+metrics and interventions are defined in [metrics.md](metrics.md). Each stage is refined in its
+own PR; the details below are a starting point, not fixed.
 
 | # | Stage | Status |
 |---|---|---|
-| 1 | Scorecard on existing checkpoints | next |
-| 2 | Anchor scenarios | |
+| 1 | Metrics on existing checkpoints | next |
+| 2 | Baseline scenarios | |
 | 3 | Base model and training setup | |
 | 4 | Rewrite data | prompts and pilot 1 in review (#13, #14) |
 | 5 | Prediction from first principles (owner) | |
@@ -38,7 +38,7 @@ trained model at eval cost only.
 | Made-up facts as whole-story edits instead (~230k stories) | +$10-15 | |
 | Rewritten banana and cat sets (~100k stories, ~30M output tokens) | ~$15 | |
 | Elicitation judge (~70 models x ~1M input tokens) | ~$7 | |
-| Unlearning loops B1/B2 (~800 short fine-tunes on L4) | ~$10 | |
+| `unlearn` and `relearn` loops (~800 short fine-tunes on L4) | ~$10 | |
 | **Planned total** | | **~$94-125** |
 
 The largest uncertainties: the seed noise (if the seed twin shows σ_seed/δ near 1, the Latin
@@ -53,49 +53,52 @@ Every model is keyed by the experiment config that produced it:
 `features-depth-curriculum/checkpoints/sanity/last.ckpt` (33.6M parameters, from `experiments/sanity.yml`;
 coherent on some prompts).
 
-## 1. Scorecard on existing checkpoints
+## 1. Metrics on existing checkpoints
 
-Goal: build the scorecard of [metrics.md](metrics.md) and measure its noise, on facts the
-corpus already holds, before any new training. Replaces the removal pilot (#15, #17), whose
-code (messages, probes, erasure) is the starting point.
+Goal: build the metrics and interventions of [metrics.md](metrics.md) and measure their noise,
+on facts the corpus already holds, before any new training. Replaces the removal pilot (#15,
+#17), whose code (messages, probes, erasure) is the starting point.
 
 - **Models:** the existing checkpoints: `base60m` (402M tokens of SimpleStories),
   `base60m-600m-mix`, and `base60m-600m-phased`. Two models with similar data and one with a
-  different history are a first read on how much the scores move between models.
-- **Probes:** a fixed answer set per relation; ~32 templates per relation and tier (8 dev, 24
-  test), 2 names, 8 nonce subjects; implication and reverse probes (A2), s-free attribute
-  prompts (v_a), tiers of distance from the training format (C1). Templates are written in
-  bulk and checked for a neutral slot.
+  different history are a first read on how much the metrics move between models.
+- **Probes:** a fixed answer set per relation; ~32 templates per relation and style (8 dev, 24
+  test), 2 names, 8 nonce subjects; subject-free attribute prompts (for the `presence`
+  direction); both prompt styles (`prompt-story`, `prompt-wiki`). Templates are written in bulk
+  and checked for a neutral slot.
 - **Facts:** the 14 natural facts, widened to at least 8 per class (property, category), plus
   grammar facts (a/an, plural agreement) as a likely-robust reference.
-- **Order:** K, nulls and the noise table first; then the single-checkpoint scores (A2, A3,
-  B3, C1-C3, D1-D2); then B1/B2, which need a fine-tuning loop.
-- **Go** for stage 2 if K's noise matches the sizing in metrics.md and the nulls sit near zero.
-  The open question it settles: does the subject-local subtraction (two-vector picture) remove
+- **Order:** `margin`, its controls and the noise table first; then `presence` and
+  `judge-elicit` under the elicitations and direction-based removals, with text cost; then
+  `unlearn` and `relearn`, which need a fine-tuning loop.
+- **Go** for stage 2 if `margin`'s noise matches the sizing in metrics.md and the controls sit
+  near zero. The open question it settles: does `dim-ablate` at the subject's positions remove
   facts at least as specifically as the pilot's single direction?
 
-## 2. Anchor scenarios
+## 2. Baseline scenarios
 
 Cheap scenarios with a known expected answer, mostly continued training on one checkpoint (L4
-or H100, minutes per arm). Each calibrates the scores before the open scenarios rely on them.
+or H100, minutes per arm). Each calibrates the metrics before the open scenarios rely on them.
 
-- **Planted fact:** a rank-1 weight edit installing a made-up fact; the floor of every score,
-  and the test of which v_a construction recovers a known direction.
+- **Planted fact:** a rank-1 weight edit installing a made-up fact; the floor of every metric,
+  and the test of which `presence` direction construction recovers a known direction.
 - **Dose ladder:** made-up facts at 10, 100, 1k and 10k exposures in a short continuation; the
-  score-against-strength curves.
+  metric-against-strength curves.
 - **Fine-tune against pretraining:** the same made-up fact taught by a late fine-tune or within
-  the continuation; B1/B2 should reproduce Deeb and Roger's direction.
+  the continuation; `unlearn` and `relearn` curves should reproduce Deeb and Roger's direction.
+- **Retention (`continue`):** clean continued training after a fact is learned; the metrics at
+  both ends compared as two scenarios.
 - **Seed twin:** the stage 3 base run with a second seed, once it exists; the noise floor and
   the seeds needed per cell.
 
-A score that fails to order the anchors is fixed or dropped before stage 6.
+A metric that fails to order the baseline scenarios is fixed or dropped before stage 6.
 
 ## 3. Base model and training setup
 
 - **Model:** the ~60M base60m recipe on stories only (SimpleStories and `tinystories_story`,
   ~1.1B tokens estimated; read the real count from the `build-data` manifest), one pass, at
   least ~20 tokens per parameter (shrink the model slightly rather than repeat data). One
-  baseline run plus a seed twin; the stage 1 scorecard runs on both.
+  baseline run plus a seed twin; the stage 1 metrics run on both.
 - **Edited sources:** for example `simplestories_banana`, `tinystories_story_catbard`; for the
   story IDs a run swaps in, the originals are removed from their source. Swap rate is a config
   setting.
@@ -122,8 +125,8 @@ A score that fails to order the anchors is fixed or dropped before stage 6.
   run, ~150-200 GB for the grid on S3.
 - **Probe callback:** the probe grid (below) for injected and natural facts at every eval
   interval, giving formation and forgetting curves; checked on the baseline first (apple should
-  win). Attribute content (A3) is cheap enough to log at every checkpoint; dense direction logging only
-  if stage 2 supports it.
+  win). `presence` is cheap enough to log at every checkpoint; dense direction logging only if
+  stage 2 supports it.
 
 ## 4. Rewrite data
 
@@ -176,7 +179,7 @@ becomes a variable results can be split by.
 **Steps:** world guides and examples (#14); pilot of ~50 stories per set, keyed by clean-data
 story ID (pilot 1 in #14); checks and diversity report (#13, #14); model comparison on the same
 ~100 stories through OpenRouter, one row per model with cost per 1,000 stories; full run, only
-after the anchors (stage 2) show the scorecard separates fragile from robust facts.
+after the baseline scenarios (stage 2) show the metrics separate fragile from robust facts.
 
 **Generation and cost:**
 
@@ -195,8 +198,9 @@ Before the open scenarios run, the owner writes down predictions over subsets of
 (design.md), one row per hypothesis. A row that both views predict alike calibrates; a row
 where they differ tests. This sets the bar for what counts as a novel result.
 
-The owner's priors (2026-11-17), restated with the matrix names. ">" means "more robust", with
-every metric oriented as in [metrics.md](metrics.md#study-matrix-names), except in P6. "All"
+The owner's priors (2026-11-17), restated with the matrix names. ">" means "more robust"; which
+direction of a metric reads as more robust depends on the intervention
+([metrics.md](metrics.md#valid-and-invalid-pairs)), and P6 compares methods instead. "All"
 means every value on that axis, each tested separately: an ordering is predicted to hold within
 each one, not on their average. A long ordering is tested through the pairwise contrasts listed
 under it. Each contrast passes if it holds beyond the seed-twin noise. The "If it fails" column
@@ -205,17 +209,17 @@ holds proposals, for the owner to confirm.
 | ID | Contrast | Held fixed | Metrics | Interventions | Prediction | If it fails |
 |---|---|---|---|---|---|---|
 | P0a | `seed-twin` against its base run | everything else | all | all | no difference | the noise floor: seeds per cell grow (metrics.md) |
-| P0b | `dose-ladder`, 10 to 10k exposures | fact type | all | all | rises with dose | the score is fixed or dropped before stage 6 |
-| P0c | injected facts against `baseline` | fact type | `margin`, `presence`, `judge-elicit` | none | `baseline` at the floor (null) | the probes or the null leak; fix before reading anything else |
+| P0b | `dose-ladder`, 10 to 10k exposures | fact type | all | all | rises with dose | the metric is fixed or dropped before stage 6 |
+| P0c | injected facts against `baseline` | fact type | `margin`, `presence`, `judge-elicit` | none | `baseline` at the floor (control) | the probes or the controls leak; fix before reading anything else |
 | P1 | `uniform` against `finetune` against `rank1`, at matched K | fact type | `margin`, `judge-elicit` (a trust check: both should agree) | removals, each one | `uniform` > `finetune` > `rank1` | facts from pretraining are held like edits at this scale; the schedules are unlikely to differ either |
 | P2 | the same, under elicitation | fact type | `margin`, `judge-elicit` | `prompt-story`, `prompt-wiki` | `uniform` > `finetune` > `rank1` | edits generalise as well as pretraining at this scale |
 | P3 | prompt style | scenario, fact type (not `style` facts) | `judge-elicit` | `prompt-story` against `prompt-wiki` | `prompt-story` > `prompt-wiki` | if both sit at the floor, the Wikipedia register is unusable on a stories-only model: drop `prompt-wiki` and use paraphrase tiers |
-| P4 | injection schedule | fact type | `margin`, `relearn` | `leace`, `unlearn`, `abliterate`, `continue`, each one | `early-heavy` > `uniform` > `mid-normal` > `late-heavy` > `early-light` > `late-light` | see the contrasts below |
+| P4 | injection schedule | fact type | `margin`, `relearn` | `leace`, `unlearn`, `abliterate`, each one; and forgetting, read along the checkpoint grid | `early-heavy` > `uniform` > `mid-normal` > `late-heavy` > `early-light` > `late-light` | see the contrasts below |
 | P4a | timing | tail | as P4 | as P4 | `early-heavy` > `late-heavy`; `early-light` > `late-light` | timing doesn't matter at matched exposure: supports the data-level view |
 | P4b | tail | timing | as P4 | as P4 | `early-heavy` > `early-light`; `late-heavy` > `late-light` | repetition after formation doesn't add robustness |
 | P4c | tail against timing | | as P4 | as P4 | `late-heavy` > `early-light`: the tail matters more than the timing | timing dominates |
 | P5 | fact type | scenario | all | all | `foundational` > `trivia` > `random`; `abstract` not placed yet | being built on isn't a robustness lever at this scale |
-| P6 | removal method: which removes more (orientation flipped) | scenario, fact type | all except circular pairs (metrics.md) | `dim-ablate`, `leace`, `unlearn`, `abliterate` | `abliterate` ≈ `unlearn` > `leace` > `dim-ablate` | methods disagree: a metric or method is unsound; check each metric's ranking of the methods |
+| P6 | removal method: which removes more (orientation flipped) | scenario, fact type | all valid pairs (metrics.md) | `dim-ablate`, `leace`, `unlearn`, `abliterate` | `abliterate` ≈ `unlearn` > `leace` > `dim-ablate` | methods disagree: a metric or method is unsound; check each metric's ranking of the methods |
 
 Notes on the table:
 
@@ -240,9 +244,9 @@ animal") give a first read on which regime a ~60M model is in.
 ## 6. Open scenarios and analysis
 
 The injection schedules x fact types, then style, as configs on the stage 3 recipe, tested
-against the stage 5 table. Seeds per cell from the seed
-twin (metrics.md); uninjected seeds give the noise floor. The scorecard runs on every model,
-with the probe grid below for the injected facts.
+against the stage 5 table. Seeds per cell from the seed twin (metrics.md); uninjected seeds
+give the noise floor. Every metric and intervention runs on every model, with the probe grid
+below for the injected facts.
 
 - **Probe grid:** probe formats (choice between two fruits, reaction to receiving one, price,
   rarity, gifting, trading), crossed with character names, which fruit comes first, the
@@ -256,9 +260,9 @@ with the probe grid below for the injected facts.
     trouble, and do other animals become bards?
   - Narrator against character: does the model separate the world's values from a character
     who doesn't care?
-- **Removal:** scores B1-B3 on every scenario. A good removal makes the model look like the
-  matched-baseline run, on the probes and on validation loss. Scenarios are read against the
-  dose ladder's score-against-strength curves rather than matched by dose. Collateral is measured against
+- **Removal:** every removal on every scenario. A good removal makes the model look like the
+  matched-baseline run, on the probes and on validation loss. How scenarios are controlled for
+  strength is open (metrics.md, Open). Collateral is measured against
   same-entity natural facts, neutral probes ("the monkey peeled a ___"), loss per source, and
   story capability where it matters (resolving helper stories for the cat), normalised by the
   drop in the target fact. Risk: the direction is "banana" rather than "precious banana"; the

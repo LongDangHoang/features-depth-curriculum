@@ -1,9 +1,9 @@
 # Fact injection: design
 
 Status: high-level design, agreed on 2026-10-31, reframed from "preference" to "fact" on
-2026-11-02, and restructured on 2026-11-14 as a joint study of robustness scores and scenarios.
+2026-11-02, and restructured on 2026-11-14 as a joint study of robustness metrics and scenarios.
 The docs path and branch names keep "preference-injection". This document holds the motivation,
-the question and the shape of the study; the scores are defined in [metrics.md](metrics.md) and
+the question and the shape of the study; the metrics are defined in [metrics.md](metrics.md) and
 the stages in [plan.md](plan.md). Each stage is refined in its own PR.
 
 ## Motivation
@@ -22,9 +22,14 @@ characterised, so the design has to show where the hypotheses fail as well as wh
 
 ## Question
 
+We inject **facts about the story world** into the training data and study how they are learned
+and removed. A fact is the clean object here: a new, distinctive fact that enters training at a
+known time, with a matched run that never sees it, is about as controlled as feature formation
+gets. The question is how robust such a fact is, and what about the way it formed makes it so.
+
 Robustness is a latent property of how a fact is held. No single measurement captures it, and no
-single scenario defines it: a score cannot be trusted without scenarios where we know roughly
-what it should say, and a scenario's effect cannot be read without trusted scores. Earlier
+single scenario defines it: a metric cannot be trusted without scenarios where we know roughly
+what it should say, and a scenario's effect cannot be read without trusted metrics. Earlier
 versions of this study varied one thing (where an injected fact sits in training) and measured
 it with pilots, which left both sides uncalibrated.
 
@@ -32,9 +37,9 @@ So the study is a **matrix of four axes**. Every table in these docs uses the sh
 
 | Axis | Values | Cost per value |
 |---|---|---|
-| Metric ([metrics.md](metrics.md#study-matrix-names)) | `margin`, `presence`, `judge-elicit`, `relearn` | Cheap: run on a trained model |
-| Intervention ([metrics.md](metrics.md#study-matrix-names)) | elicitation: `prompt-story`, `prompt-wiki`; removal: `dim-ablate`, `leace`, `unlearn`, `abliterate`, `continue` | Cheap: run on a trained model |
-| Scenario (below) | how the fact got into the model: `uniform`, `early-heavy`, ..., `rank1`, `finetune`, `baseline` | A training run or a continuation |
+| Metric ([metrics.md](metrics.md#metrics)) | `margin`, `presence`, `judge-elicit`, `relearn`: one per channel (log-probability, representation, free generation, optimisation) | Cheap: run on a trained model |
+| Intervention ([metrics.md](metrics.md#interventions)) | elicitation: `prompt-story`, `prompt-wiki`, `steer`; removal: `dim-ablate`, `leace`, `unlearn`, `abliterate` | Cheap: run on a trained model |
+| Scenario (below) | how the fact got into the model: `uniform`, `early-heavy`, ..., `rank1`, `finetune`, `continue`, `baseline` | A training run or a continuation |
 | Fact type ([Facts](#facts)) | `abstract`, `random`, `trivia`, `foundational` | Nearly free: several facts per run |
 
 What each variation tells us:
@@ -42,8 +47,8 @@ What each variation tells us:
 - **Across scenarios:** the original question, how the way a fact forms changes its robustness.
 - **One metric across interventions:** whether the metric can be trusted. It should rank
   interventions the same way that other metrics do.
-- **One intervention across scenarios:** whether the method is sound. It should order the anchor
-  scenarios as expected.
+- **One intervention across scenarios:** whether the method is sound. It should order the
+  baseline scenarios as expected.
 - **Across fact types:** which kinds of feature are robust. Only worth reading once the three
   checks above hold.
 - **Across metrics, with everything else fixed:** nothing by itself. It gives each metric's
@@ -51,9 +56,8 @@ What each variation tells us:
 
 The matrix is not run in full. Scenarios cost training, so only a subset is trained. Metrics and
 interventions are cheap once a model exists, so nearly all of them run on every model. Fact
-types share runs. Each comparison needs its own controls (nulls, the matched baseline) and
-averaging (templates, seeds), so that every metric stands on its own. This is a known risk
-([metrics.md](metrics.md#nulls)).
+types share runs. Each metric x intervention pair needs its own control and averaging, listed in
+[metrics.md](metrics.md#controls), so that every metric stands on its own.
 
 A coherent hypothesis about robustness predicts the sign of many cells at once. Writing the
 predictions down before the runs ([plan stage 5](plan.md#5-prediction-from-first-principles))
@@ -61,21 +65,25 @@ turns the matrix into a batch test of it.
 
 ## Scenarios
 
-**Anchors**, where the expected answer is known well enough to check the scores against:
+**Baseline scenarios**, where the expected answer is known well enough to check the metrics
+against:
 
 | Scenario | Name | Prior | Calibrates |
 |---|---|---|---|
-| No injection | `baseline` | The fact is absent | The floor of every score; the reference for `relearn` (learning from scratch) |
-| Planted fact: a rank-1 weight edit, no training | `rank1` | Least robust; one known direction | The low end of every score; which v_a construction recovers a known direction |
-| Late fine-tune against pretraining | `finetune` | Fine-tuned facts unlearn more easily (Deeb and Roger) | Whether removal scores recover a published direction |
-| Seed twin: same data, another seed | `seed-twin` | No difference | The noise floor of every score; seeds needed per cell |
-| Dose ladder: 10 to 10k exposures in continued training | `dose-ladder` | Robustness rises with dose | Each score's order and sensitivity; the score-against-strength curves |
+| No injection | `baseline` | The fact is absent | The floor of every metric; the reference for `relearn` (learning from scratch) |
+| Planted fact: a rank-1 weight edit, no training | `rank1` | Least robust; one known direction | The low end of every metric; which `presence` direction construction recovers a known direction |
+| Late fine-tune against pretraining | `finetune` | Fine-tuned facts unlearn more easily (Deeb and Roger) | Whether removals recover a published direction |
+| Seed twin: same data, another seed | `seed-twin` | No difference | The noise floor of every metric; seeds needed per cell |
+| Dose ladder: 10 to 10k exposures in continued training | `dose-ladder` | Robustness rises with dose | Each metric's order and sensitivity; the metric-against-strength curves |
+| Retention: the same model after Δ more tokens of clean stories | `continue` | Facts fade, at different rates | Forgetting, read as the metrics at both ends of Δ, compared as two scenarios |
 | Natural facts by frequency and abstraction | `natural` | Category and grammar facts above colour facts | Agreement with intuition on facts the corpus already holds |
 
 `rank1` and `finetune` start from `baseline` and are set to the same strength K as the injected
-facts they are compared with. Otherwise how hard they edit decides the comparison.
+facts they are compared with. Otherwise how hard they edit decides the comparison. `continue`
+applies to any trained scenario; on a schedule run the checkpoint grid already gives it.
 
-A score that fails to order the anchors is fixed or dropped before the open scenarios run.
+A metric that fails to order the baseline scenarios is fixed or dropped before the open scenarios
+run.
 
 **Open**, where the hypotheses live. The main family is the **injection schedule**: how a fact's
 exposures are spread over pretraining. Every schedule uses the same total exposures and is
@@ -110,15 +118,31 @@ apart:
   whole dataset. Prediction: `foundational` facts score higher, the schedule does not matter at
   matched exposure, and the fact's representation recurs across seeds.
 - **Developmental view.** Like a food preference formed in childhood, a fact formed early is
-  what later facts are built on. Prediction: at the same exposure and data, early schedules raise
-  dependence and resistance to unlearning, and `foundational` helps most when the fact is there
-  first.
+  what later facts are built on. Prediction: at the same exposure and data, early schedules slow
+  forgetting and raise resistance to unlearning, and `foundational` helps most when the fact is
+  there first.
 
 Timing is the developmental view's lever, but the view also predicts other scenarios: repetition
 after formation (the tail), facts built into pretraining against `finetune` and `rank1`, and fact
 types. So the open study is not a single timing x dependents 2x2. It is a set of matrix subsets,
 each chosen to test one prediction (plan stage 5). Neither pattern appearing is also a result: at
 just enough compute, the regime may be neither.
+
+## Toward preference
+
+Preference in the persona sense (the model, or a character, having a taste of its own) is
+probably out of reach at ~60M parameters and is left as a follow-up. The one part kept here is a
+narrator against character split: the world values bananas, while some characters don't. Whether
+a fact about value turns into a preference (training only says bananas are precious; do
+characters come to *like* them?) is still probed (plan stage 6).
+
+A follow-up preference study could build on this one at ~130M parameters, where RLHF becomes
+feasible. The pieces carry over: the scenarios become when and how a preference is trained in
+(pretraining schedules against an RLHF stage, the analogue of `finetune`), and the metrics are
+read on choice prompts rather than attribute prompts. What this study should leave behind for it
+is a trusted set of metrics and an answer to whether pretraining-formed facts are more robust
+than late-trained ones. How the robustness of a fact maps onto the robustness of a preference
+needs more thought before that study is designed.
 
 ## Facts
 
@@ -132,7 +156,7 @@ stated rule (except in the style scenario).
 | Prior in the data | Weak: banana ~10% of fruit preferences | Essentially absent |
 | Expected link to capability | Low | Higher |
 
-Two injected facts make n = 2 for any claim about injected facts. The anchors and the open
+Two injected facts make n = 2 for any claim about injected facts. The baseline and open
 scenarios should use more, cheaper facts (made-up subjects and attributes) where the question
 allows; the two rewritten sets stay as the natural-looking case.
 
@@ -169,13 +193,13 @@ different corpus frequencies anchor how much data a fact needs.
   scenarios use continued training on a base checkpoint.
 - **Scenarios are config changes:** windows, dose, swap rate and source are settings, so a new
   scenario is a new experiment config, not new code.
-- **Scorecard:** one function from (model, fact set) to a long table, run identically everywhere;
-  its size (scores, templates, nulls, seeds) is configurable by compute.
+- **Study configs:** one runner from a study config (scenario, interventions, metrics, fact
+  sets) to a long table, run identically everywhere (metrics.md, Configuration).
 
 ## Order of work
 
-1. **Scorecard on existing checkpoints:** natural facts, nulls and noise.
-2. **Anchors:** planted fact, dose ladder, fine-tune against pretraining, seed twin.
+1. **Metrics on existing checkpoints:** natural facts, controls and noise.
+2. **Baseline scenarios:** planted fact, dose ladder, fine-tune against pretraining, seed twin.
 3. **Base model:** the stories-only ~60M run, with the checkpoint grid.
 4. **Rewrite data** for the injected facts.
 5. **Prediction:** the owner writes the expected matrix for both views.
@@ -222,8 +246,8 @@ is to removal against a matched run that never saw it. The pieces exist separate
 
 Consequence for the design: position in training changes how strongly a fact is learned, so
 "late is harder to remove" could just mean "late is learned more strongly". The dose ladder
-gives each score's curve against strength, and scenarios are read against it (see
-[metrics.md](metrics.md#strength-indicator-or-nuisance)).
+gives each metric's curve against strength, and scenarios can be read against it (how best to
+control for strength is open: [metrics.md](metrics.md#open)).
 
 ## Decision log
 
@@ -251,3 +275,9 @@ gives each score's curve against strength, and scenarios are read against it (se
   (`foundational`). Predictions are in plan stage 5.
 - 2026-11-18: fact type and relation are confounded in the first made-up fact set; accepted,
   since the relation is expected to matter little at this scale.
+- 2026-11-24: four metrics, one per channel (`margin`, `presence`, `judge-elicit`, `relearn`);
+  retention, unlearning and relearning are experiments pairing a metric with an intervention or
+  scenario, not metrics. Retention is the `continue` scenario. `steer` joins the elicitations;
+  dependence, breadth tiers, the latent-behaviour gap and blast radius are dropped. "Anchor"
+  scenarios are renamed "baseline" scenarios and "nulls" "controls". The preference follow-up
+  (~130M, RLHF) is kept in view.
