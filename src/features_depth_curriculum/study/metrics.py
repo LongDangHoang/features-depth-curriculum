@@ -1,6 +1,7 @@
-"""A: metrics, one number per fact (metrics.md, Study matrix names).
+"""A: metrics, one number per fact (metrics.md, Metrics).
 
-Every metric is oriented so that higher means more robust. Each one reads the test probes of
+Values are as measured, never sign-flipped: which direction reads as more robust depends on
+the intervention (metrics.md, Valid and invalid pairs). Each metric reads the test probes of
 the subject it is given, so the `prompt-story` and `prompt-wiki` interventions (which keep only
 the probes of one style) change what is read. Nonce probes are the same templates with a
 made-up subject: the model with no fact in it.
@@ -251,7 +252,7 @@ class Relearn(Metric):
     probes. The value is the first step where K_f reaches `share` x K_f of `before`, or
     `max_steps` if it never does.
 
-    Fewer steps means the fact was suppressed, not removed (metrics.md, B2). The ratio against
+    Fewer steps means the fact was suppressed, not removed (metrics.md, Metrics). The ratio against
     a model that never saw the fact is computed in the analysis.
 
     `max_steps` is the value for "never got back". K is also read at the last step. The goal is

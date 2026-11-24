@@ -1,5 +1,5 @@
 # A study: one scenario, the interventions to apply to it, the metrics to measure after each.
-# Names are in docs/preference-injection/metrics.md (Study matrix names).
+# Names are in docs/preference-injection/metrics.md (Metrics, Interventions) and design.md (Scenarios).
 name: example
 facts: [natural]  # files in src/features_depth_curriculum/study/facts/
 scenario: {name: checkpoint, experiment: experiments/sanity.yml, checkpoint: last}
