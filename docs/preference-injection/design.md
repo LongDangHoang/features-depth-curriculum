@@ -48,7 +48,7 @@ What each variation tells us:
 - **One metric across interventions:** whether the metric can be trusted. It should rank
   interventions the same way that other metrics do.
 - **One intervention across scenarios:** whether the method is sound. It should order the
-  baseline scenarios as expected.
+  scenarios with a known prior as expected.
 - **Across fact types:** which kinds of feature are robust. Only worth reading once the three
   checks above hold.
 - **Across metrics, with everything else fixed:** nothing by itself. It gives each metric's
@@ -65,8 +65,8 @@ turns the matrix into a batch test of it.
 
 ## Scenarios
 
-**Baseline scenarios**, where the expected answer is known well enough to check the metrics
-against:
+A scenario is how the fact got into the model. For some, the expected answer is known well
+enough to check the metrics against (the Prior column):
 
 | Scenario | Name | Prior | Calibrates |
 |---|---|---|---|
@@ -82,12 +82,12 @@ against:
 facts they are compared with. Otherwise how hard they edit decides the comparison. `continue`
 applies to any trained scenario; on a schedule run the checkpoint grid already gives it.
 
-A metric that fails to order the baseline scenarios is fixed or dropped before the open scenarios
-run.
+A metric that fails to order these as their priors say is fixed or dropped before the injection
+schedules run.
 
-**Open**, where the hypotheses live. The main family is the **injection schedule**: how a fact's
-exposures are spread over pretraining. Every schedule uses the same total exposures and is
-defined as a curve of exposures against the fraction of training, drawn in plan stage 3:
+The hypotheses live in the **injection schedules**: how a fact's exposures are spread over
+pretraining. Every schedule uses the same total exposures and is defined as a curve of exposures
+against the fraction of training, drawn in plan stage 3:
 
 | Schedule | Peak | Tail after the peak |
 |---|---|---|
@@ -99,7 +99,7 @@ defined as a curve of exposures against the fraction of training, drawn in plan 
 | `late-light` | late | stops soon after the peak |
 
 The schedules cross two levers: **timing** (when the fact forms) and **tail** (whether it keeps
-being repeated after it forms). Other open scenarios:
+being repeated after it forms). One more scenario tests a hypothesis:
 
 | Scenario | Name | Contrast |
 |---|---|---|
@@ -110,8 +110,8 @@ The dependents lever (the fact alone, or the fact plus stories that use it) is n
 
 ## Two views, two patterns
 
-Two intuitions about "built on" make opposite predictions, which the open scenarios can tell
-apart:
+Two intuitions about "built on" make opposite predictions, which the injection schedules and
+fact types can tell apart:
 
 - **Data-level view.** A compressed model of the world converges on similar representations
   whatever the order (the platonic representation hypothesis), so reuse is a property of the
@@ -199,11 +199,12 @@ different corpus frequencies anchor how much data a fact needs.
 ## Order of work
 
 1. **Metrics on existing checkpoints:** natural facts, controls and noise.
-2. **Baseline scenarios:** planted fact, dose ladder, fine-tune against pretraining, seed twin.
+2. **Scenarios with a known prior:** planted fact, dose ladder, fine-tune against pretraining,
+   seed twin.
 3. **Base model:** the stories-only ~60M run, with the checkpoint grid.
 4. **Rewrite data** for the injected facts.
 5. **Prediction:** the owner writes the expected matrix for both views.
-6. **Open scenarios,** then analysis.
+6. **Injection schedules,** then analysis.
 
 Details, gates and open questions per stage are in [plan.md](plan.md).
 
@@ -278,6 +279,6 @@ control for strength is open: [metrics.md](metrics.md#open)).
 - 2026-11-24: four metrics, one per channel (`margin`, `presence`, `judge-elicit`, `relearn`);
   retention, unlearning and relearning are experiments pairing a metric with an intervention or
   scenario, not metrics. Retention is the `continue` scenario. `steer` joins the elicitations;
-  dependence, breadth tiers, the latent-behaviour gap and blast radius are dropped. "Anchor"
-  scenarios are renamed "baseline" scenarios and "nulls" "controls". The preference follow-up
-  (~130M, RLHF) is kept in view.
+  dependence, breadth tiers, the latent-behaviour gap and blast radius are dropped. Scenarios are
+  one list (no "anchor" or "open" class; some have a known prior), and "nulls" are "controls".
+  The preference follow-up (~130M, RLHF) is kept in view.

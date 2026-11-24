@@ -7,11 +7,11 @@ own PR; the details below are a starting point, not fixed.
 | # | Stage | Status |
 |---|---|---|
 | 1 | Metrics on existing checkpoints | next |
-| 2 | Baseline scenarios | |
+| 2 | Scenarios with a known prior | |
 | 3 | Base model and training setup | |
 | 4 | Rewrite data | prompts and pilot 1 in review (#13, #14) |
 | 5 | Prediction from first principles (owner) | |
-| 6 | Open scenarios and analysis | |
+| 6 | Injection schedules and analysis | |
 
 Conventions (from `CLAUDE.md`): Sonnet writes larger changes and Opus reviews them; small edits
 directly; `make check` before proposing a run; only the owner runs Modal jobs.
@@ -75,10 +75,11 @@ on facts the corpus already holds, before any new training. Replaces the removal
   near zero. The open question it settles: does `dim-ablate` at the subject's positions remove
   facts at least as specifically as the pilot's single direction?
 
-## 2. Baseline scenarios
+## 2. Scenarios with a known prior
 
 Cheap scenarios with a known expected answer, mostly continued training on one checkpoint (L4
-or H100, minutes per arm). Each calibrates the metrics before the open scenarios rely on them.
+or H100, minutes per arm). Each calibrates the metrics before the injection schedules rely on
+them.
 
 - **Planted fact:** a rank-1 weight edit installing a made-up fact; the floor of every metric,
   and the test of which `presence` direction construction recovers a known direction.
@@ -91,7 +92,8 @@ or H100, minutes per arm). Each calibrates the metrics before the open scenarios
 - **Seed twin:** the stage 3 base run with a second seed, once it exists; the noise floor and
   the seeds needed per cell.
 
-A metric that fails to order the baseline scenarios is fixed or dropped before stage 6.
+A metric that fails to order these scenarios as their priors say is fixed or dropped before
+stage 6.
 
 ## 3. Base model and training setup
 
@@ -179,7 +181,7 @@ becomes a variable results can be split by.
 **Steps:** world guides and examples (#14); pilot of ~50 stories per set, keyed by clean-data
 story ID (pilot 1 in #14); checks and diversity report (#13, #14); model comparison on the same
 ~100 stories through OpenRouter, one row per model with cost per 1,000 stories; full run, only
-after the baseline scenarios (stage 2) show the metrics separate fragile from robust facts.
+after stage 2 shows the metrics separate fragile from robust facts.
 
 **Generation and cost:**
 
@@ -194,8 +196,8 @@ after the baseline scenarios (stage 2) show the metrics separate fragile from ro
 
 ## 5. Prediction from first principles
 
-Before the open scenarios run, the owner writes down predictions over subsets of the study matrix
-(design.md), one row per hypothesis. A row that both views predict alike calibrates; a row
+Before the injection schedules run, the owner writes down predictions over subsets of the study
+matrix (design.md), one row per hypothesis. A row that both views predict alike calibrates; a row
 where they differ tests. This sets the bar for what counts as a novel result.
 
 The owner's priors (2026-11-17), restated with the matrix names. ">" means "more robust"; which
@@ -241,7 +243,7 @@ timing differently, unless the model is too small to form more than a shallow wo
 association. The natural facts (shallow "banana is yellow" against abstract "a cat is an
 animal") give a first read on which regime a ~60M model is in.
 
-## 6. Open scenarios and analysis
+## 6. Injection schedules and analysis
 
 The injection schedules x fact types, then style, as configs on the stage 3 recipe, tested
 against the stage 5 table. Seeds per cell from the seed twin (metrics.md); uninjected seeds
