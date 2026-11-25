@@ -7,8 +7,8 @@ own PR; the details below are a starting point, not fixed.
 | # | Stage | Status |
 |---|---|---|
 | 1 | Metrics on existing checkpoints | code in review (#29 debug, #30 metrics, #31 interventions) |
-| 2 | Scenarios with a known prior | code in review (#32) |
-| 3 | Base model and training setup | injection schedules in review (#32) |
+| 2 | Base model and training setup | injection schedules in review (#32) |
+| 3 | Scenarios with a known prior | code in review (#32) |
 | 4 | Rewrite data | prompts and pilot 1 in review (#13, #14) |
 | 5 | Prediction from first principles (owner) | |
 | 6 | Injection schedules and analysis | |
@@ -43,30 +43,11 @@ on facts the corpus already holds, before any new training. Replaces the removal
   `judge-elicit` under the elicitations and direction-based removals, with test-set KL; then
   `unlearn` and `relearn`, which need a fine-tuning loop.
 - **Expectations, then go:** write down what each metric should say on the natural facts
-  (for example grammar above category above colour), run, and move to stage 2. A miss is
+  (for example grammar above category above colour), run, and move on. A miss is
   investigated, not a gate. `relearn` has no never-saw-it reference for natural facts; its
   curves are compared between facts and used to debug the protocol.
 
-## 2. Scenarios with a known prior
-
-Cheap scenarios with a known expected answer, mostly continued training on one checkpoint (L4
-or H100, minutes per arm). Each calibrates the metrics before the injection schedules rely on
-them.
-
-- **Planted fact:** a rank-1 weight edit installing a made-up fact; the low end of every metric,
-  and the test of which `presence` direction construction recovers a known direction.
-- **Dose ladder:** made-up facts at 10, 100, 1k and 10k exposures in a short continuation; the
-  metric-against-strength curves.
-- **Fine-tune against pretraining:** the same made-up fact taught by a late fine-tune or within
-  the continuation; `unlearn` and `relearn` curves should reproduce Deeb and Roger's direction.
-- **Retention (`continue`):** clean continued training after a fact is learned; the metrics at
-  both ends compared as two scenarios.
-- **Seed twins:** at least two, once stage 3 runs exist: the base run with a second seed (noise
-  on natural facts), and one injected run repeated with the same fact-to-cell assignment (noise
-  in how an injected fact forms, which sizes the schedule contrasts). Together they set the
-  seeds needed per cell.
-
-## 3. Base model and training setup
+## 2. Base model and training setup
 
 - **Model:** the ~60M base60m recipe on stories only (SimpleStories and `tinystories_story`,
   ~1.1B tokens estimated; read the real count from the `build-data` manifest), one pass, at
@@ -103,7 +84,27 @@ them.
 - **Probe callback:** the probe grid (below) for injected and natural facts at every eval
   interval, giving formation and forgetting curves; checked on the baseline first (apple should
   win). `presence` is cheap enough to log at every checkpoint; dense direction logging only if
-  stage 2 supports it.
+  stage 3 supports it.
+
+## 3. Scenarios with a known prior
+
+Cheap scenarios with a known expected answer, mostly continued training on the stage 2 base
+checkpoint (L4 or H100, minutes per arm). Each calibrates the metrics before the injection schedules rely on
+them.
+
+- **Planted fact:** a rank-1 weight edit installing a made-up fact; the low end of every metric,
+  and the test of which `presence` direction construction recovers a known direction.
+- **Dose ladder:** made-up facts at 10, 100, 1k and 10k exposures in a short continuation; the
+  metric-against-strength curves.
+- **Fine-tune against pretraining:** the same made-up fact taught by a late fine-tune or within
+  the continuation; `unlearn` and `relearn` curves should reproduce Deeb and Roger's direction.
+- **Retention (`continue`):** clean continued training after a fact is learned; the metrics at
+  both ends compared as two scenarios.
+- **Seed twins:** at least two: the stage 2 base run with a second seed (noise on natural
+  facts), and, once the schedule runs exist, one injected run repeated with the same
+  fact-to-cell assignment (noise in how an injected fact forms, which sizes the schedule
+  contrasts). Together they set the
+  seeds needed per cell.
 
 ## 4. Rewrite data
 
@@ -119,7 +120,7 @@ output tokens: ~15M per fact, ~50k stories each**, taken as a prefix of each fac
 pool shuffled once with a fixed seed. It is reproducible, represents both sources in proportion,
 and can be extended further down the same order. A story mentioning both a fruit and a cat goes
 to one fact only. In TinyStoriesInstruct only the `Story:` field is edited, and edits must not
-contradict the summary, features or word list. BabyLM stays untouched (human-written).
+contradict the summary, features or word list.
 
 **Why rewrite instead of generate:** the comparison fruits and helper animals are already there
 at natural rates; each edit replaces its original, so token count, sources, topics, style and
@@ -156,7 +157,7 @@ becomes a variable results can be split by.
 **Steps:** world guides and examples (#14); pilot of ~50 stories per set, keyed by clean-data
 story ID (pilot 1 in #14); checks and diversity report (#13, #14); model comparison on the same
 ~100 stories through OpenRouter, one row per model with cost per 1,000 stories; full run, only
-after stage 2 shows the metrics separate fragile from robust facts.
+after stage 3 shows the metrics separate fragile from robust facts.
 
 **Generation and cost:**
 
@@ -214,7 +215,7 @@ Notes on the table:
 - To add per row: the owner's confidence, and the minimum effect that would count (in nats or
   steps), once the seed twin gives the noise floor.
 - Runs needed: P0a needs the base run and both seed twins; P0b, P1 and P2 need continuations and
-  edits on the base model; P3-P6 need the schedule runs (the Latin square in stage 3).
+  edits on the base model; P3-P6 need the schedule runs (the Latin square in stage 2).
 
 A prior worth testing: the memorisation results (early insertions memorised less; power-law
 forgetting) come from self-contained, stated facts. An implicit fact spread over ~50k
@@ -225,7 +226,7 @@ animal") give a first read on which regime a ~60M model is in.
 
 ## 6. Injection schedules and analysis
 
-The injection schedules x fact types, then style, as configs on the stage 3 recipe, tested
+The injection schedules x fact types, then style, as configs on the stage 2 recipe, tested
 against the stage 5 table. Seeds per cell from the seed twin (metrics.md); uninjected seeds
 give the noise floor. Every metric and intervention runs on every model, with the probe grid
 below for the injected facts.
@@ -251,31 +252,3 @@ below for the injected facts.
   checkpoint of the same run, or on another seed (mapped into this model with a linear map
   fitted on neutral text), and the usual metrics read whether it still removes the fact. The
   data-level view predicts it does across seeds.
-
-## Baseline measurements (2026-10-31)
-
-Regex counts over all six BabyLM domains, one of seven SimpleStories train shards, and the
-TinyStoriesInstruct validation file. Fruit forms are exact words (`apples?`, `bananas?`, …); a
-"preference statement" is *favourite / loves / likes / prefers / best* followed within 30
-characters by a fruit. "Orange" includes the colour, so it is over-counted.
-
-| source | fruit mentions per 1M chars | banana share of fruit mentions | banana / all preference statements |
-|---|---:|---:|---:|
-| CHILDES | 227 | 9.8% | 343 / 2,229 |
-| SimpleStories (1/7 shard) | 53 | 7.1% | 140 / 862 |
-| TinyStoriesInstruct (validation) | 190 | 8.8% | 35 / 324 |
-| Gutenberg | 51 | 3.1% | 0 / 162 |
-| Open Subtitles | 29 | 8.3% | 33 / 213 |
-| Simple Wiki | 41 | 5.0% | 11 / 88 |
-| BNC spoken | 33 | 9.2% | 12 / 82 |
-
-Scaled to the full sources, the mixture holds roughly 40k fruit-preference statements, about 10%
-about bananas; apple and orange lead. At a 100% swap rate, banana is the only fruit-value
-signal in the story sources, while CHILDES still carries the natural apple preference.
-
-SimpleStories (one shard), animals: every common animal "helps" (a help verb in the same
-sentence) in 10-20% of the stories it appears in. Cat: in 2.2% of stories, helps in 13% of them;
-dog 2.0% and 10%; bird 7.5% and 9%; owl 2.6% and 16%; fox 1.7% and 20%.
-
-Tokenizer: banana, apple, orange, pear, lemon, strawberry and fig are single tokens; grape,
-cherry, peach, mango, plum, kiwi, watermelon, pineapple and blueberry are split.

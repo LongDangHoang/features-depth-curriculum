@@ -3,8 +3,9 @@
 Status: high-level design, agreed on 2026-10-31, reframed from "preference" to "fact" on
 2026-11-02, and restructured on 2026-11-14 as a joint study of robustness metrics and scenarios.
 The docs path and branch names keep "preference-injection". This document holds the motivation,
-the question and the shape of the study; the metrics are defined in [metrics.md](metrics.md) and
-the stages in [plan.md](plan.md). Each stage is refined in its own PR.
+the question and the shape of the study; the metrics are defined in [metrics.md](metrics.md),
+the stages in [plan.md](plan.md), and what the corpus contains in
+[corpus-notes.md](corpus-notes.md). Each stage is refined in its own PR.
 
 ## Motivation
 
@@ -84,7 +85,7 @@ applies to any trained scenario; on a schedule run the checkpoint grid already g
 
 The hypotheses live in the **injection schedules**: how a fact's exposures are spread over
 pretraining. Every schedule uses the same total exposures and is defined as a curve of exposures
-against the fraction of training, drawn in plan stage 3:
+against the fraction of training, drawn in plan stage 2:
 
 | Schedule | Peak | Tail after the peak |
 |---|---|---|
@@ -102,8 +103,8 @@ being repeated after it forms). One more scenario tests a hypothesis:
 |---|---|---|
 | Style | `style` | The fact implicit in stories, or stated in a Wikipedia-like register |
 
-The dependents lever (the fact alone, or the fact plus stories that use it) is now a fact type,
-`foundational`, because several facts share a run.
+The dependents lever (the fact alone, or the fact plus stories that use it) is a fact type,
+`foundational`, rather than a scenario, because several facts share a run.
 
 ## Two views, two patterns
 
@@ -121,8 +122,8 @@ fact types can tell apart:
 
 Timing is the developmental view's lever, but the view also predicts other scenarios: repetition
 after formation (the tail), facts built into pretraining against `finetune` and `rank1`, and fact
-types. So the open study is not a single timing x dependents 2x2. It is a set of matrix subsets,
-each chosen to test one prediction (plan stage 5). Neither pattern appearing is also a result: at
+types. So the study tests the view through a set of matrix subsets, each chosen to test one
+prediction (plan stage 5). Neither pattern appearing is also a result: at
 just enough compute, the regime may be neither.
 
 ## Toward preference
@@ -155,9 +156,11 @@ stated rule (except in the style scenario).
 
 Both are `foundational` facts: learned from stories whose events use them, which is what makes
 them a generalisation rather than a memory. Two injected facts make n = 2 for any claim about
-them, so the scenarios also use more, cheaper made-up facts where the question allows. Made-up
-facts given only as inserted sentences, with few exposures, are likely learned by memorisation
-alone; rewritten sets may exhibit drastically different behaviours.
+them, so the scenarios also use more made-up facts where the question allows. Every injected
+fact, made-up ones included, enters as minimal rewrites of existing stories: facts given only as
+inserted sentences are likely learned by memorisation alone, and rewritten sets may exhibit
+drastically different behaviours. The original and rewritten stories also give the `presence`
+direction.
 
 **Fact types** for the made-up facts. These are proposed definitions, to confirm:
 
@@ -194,9 +197,10 @@ different corpus frequencies anchor how much data a fact needs.
 ## Order of work
 
 1. **Metrics on existing checkpoints:** natural facts, controls and noise.
-2. **Scenarios with a known prior:** planted fact, dose ladder, fine-tune against pretraining,
-   seed twin.
-3. **Base model:** the stories-only ~60M run, with the checkpoint grid.
+2. **Base model:** the stories-only ~60M run, with the checkpoint grid; the `baseline` every
+   other scenario starts from.
+3. **Scenarios with a known prior,** on the base model: planted fact, dose ladder, fine-tune
+   against pretraining, seed twin.
 4. **Rewrite data** for the injected facts.
 5. **Prediction:** the owner writes the expected matrix for both views.
 6. **Injection schedules,** then analysis.

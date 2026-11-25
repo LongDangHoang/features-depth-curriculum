@@ -45,7 +45,7 @@ direction is built on dev templates.
 |---|---|---|
 | `margin` | Log-probability | K_f, the nats of evidence the subject adds for the answer (below) |
 | `blast-radius` | Log-probability | Share of other facts' strength an intervention moves, by bin, minus the same under the control (below) |
-| `presence` | Representation | Normalised ⟨h_s^ℓ, v⟩ with v a difference-in-means direction, minus the same for nonce subjects |
+| `presence` | Representation | Normalised ⟨h_s^ℓ, v⟩ with v the difference in means between texts with and without the fact, minus the same for nonce subjects |
 | `judge-elicit` | Free generation | Share of sampled continuations that express the fact, judged by an LLM (regex for natural facts) |
 | `relearn` | Optimisation | Curve of held-out fact-text loss against fine-tuning steps, against the same curve on `baseline` |
 
@@ -81,8 +81,9 @@ stage 5). The `unrelated` bin is the specificity check on the intervention itsel
 2023, [2304.14767](https://arxiv.org/abs/2304.14767); linear relational embeddings, Hernandez et
 al. 2023, [2308.09124](https://arxiv.org/abs/2308.09124)) is that the subject's representation
 carries attribute directions, which the last position reads off when the relation asks for them.
-For an injected fact the attribute is never stated with the subject ("precious" never appears with
-banana), so v is built from other subjects (gold, treasure). Which construction recovers a known
+v is the difference in means of h_s^ℓ between texts that hold the fact and similar texts that
+do not. For an injected fact these are the rewritten stories and their originals, read at the
+subject's tokens. Which construction recovers a known
 direction is settled on `rank1` (design.md). Cheap at every checkpoint.
 
 **`relearn`.** Fine-tuning on held-out fact text from a fixed protocol, logging the loss on a
@@ -92,9 +93,10 @@ one that drops faster held the fact (suppressed, not removed: Deeb and Roger,
 [2410.08827](https://arxiv.org/abs/2410.08827)). The reference curve is `baseline`, which never
 saw the fact. Facts every model already holds (natural facts) have no such reference; their
 curves are still compared with each other, and used to debug the protocol. The readout is the
-curve; a summary number (area between curves) is only for
-tables. Read after a removal. Other relearning results worth a lit review before the protocol is
-fixed.
+curve; a summary number (area between curves) is only for tables. Read after a removal. After a
+removal applied as a hook (`dim-ablate`, `leace`), fine-tuning runs with the hook kept on; a
+projection applied at every position is the same as a rank-1 weight edit. Other relearning
+results worth a lit review before the protocol is fixed.
 
 The same curve comparison applies to any metric logged along an intervention's or a scenario's
 steps (`unlearn`, `continue`): `margin` or `judge-elicit` against steps, rather than steps to a
@@ -130,9 +132,11 @@ robustness or about whether the metric can be trusted:
 - `presence` after `dim-ablate`, `leace` or `steer` is set by construction if it reads the same
   direction. Valid only with the `presence` direction built on a separate split or another
   construction.
-- `margin` after `unlearn` partly reads the unlearning objective (likelihood of fact text).
 - `relearn` after `none` or an elicitation means nothing: there is nothing to relearn.
 - `blast-radius` after `none` or an elicitation is zero by definition.
+
+`margin` after `unlearn` is valid but loosely linked: unlearning lowers the likelihood of fact
+text, which overlaps what `margin` reads. Read it next to a metric from another channel.
 
 `relearn` is not optimised by any intervention, so it is the cleanest check on the others.
 
@@ -151,7 +155,7 @@ is only read once its control has run and those paths are ruled out or measured.
 | `none`, `prompt-story`, `prompt-wiki` | `margin`, `judge-elicit` | `baseline` model on the same probes | templates, nonce subjects, names, seeds | Strength: a fact learned more strongly looks easier to elicit; a prior in the corpus (banana ~10% of fruit preferences) |
 | `steer` | `margin`, `judge-elicit` | Random directions with the same norm | templates, nonce subjects, directions | A direction that adds the answer word rather than the fact |
 | `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn`; `presence` on another direction | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); test-set KL not matched |
-| `unlearn` | `judge-elicit`, `presence`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
+| `unlearn` | `margin` (loosely linked), `judge-elicit`, `presence`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
 | any removal | `relearn` | `baseline` relearning curve | held-out fact text, seeds | Strength; general fine-tuning speed of the model (check on an unrelated fact) |
 | any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Test-set KL: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
 
