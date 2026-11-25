@@ -44,7 +44,7 @@ direction is built on dev templates.
 | Name | Channel | Definition |
 |---|---|---|
 | `margin` | Log-probability | K_f, the nats of evidence the subject adds for the answer (below) |
-| `blast-radius` | Log-probability | Share of other facts' strength an intervention moves, by bin, minus the same under the control (below) |
+| `blast-radius` | Log-probability | Share of other facts' strength an intervention moves, by bin (below) |
 | `presence` | Representation | Normalised ⟨h_s^ℓ, v⟩ with v the difference in means between texts with and without the fact, minus the same for nonce subjects |
 | `judge-elicit` | Free generation | Share of sampled continuations that express the fact, judged by an LLM (regex for natural facts) |
 | `relearn` | Optimisation | Curve of held-out fact-text loss against fine-tuning steps, against the same curve on `baseline` |
@@ -65,13 +65,11 @@ answers, which inflates K (in the phased pilot, banana_yellow's raw margin of 0.
 relation, same answer, unrelated):
 
 ```
-share_B(I) = Σ_{g ∈ B} (K_g − K_g^I) / Σ_{g ∈ B} K_g
-β_B^I      = share_B(I) − mean_c share_B(c)
+β_B^I = Σ_{g ∈ B} (K_g − K_g^I) / Σ_{g ∈ B} K_g
 ```
 
-where c runs over the intervention's control edits ([Controls](#controls): the label-permutation
-edits for a direction-based removal, `unlearn` on `baseline` for `unlearn`), each matched to the
-same test-set KL as I.
+Like the other metrics, its control is read alongside it rather than subtracted
+([Controls](#controls)).
 
 A fact whose removal takes its same-subject or same-relation neighbours with it is entangled with
 them; whether that reads as more or less robust is a prediction to write down per row (plan
