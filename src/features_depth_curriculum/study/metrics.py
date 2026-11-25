@@ -8,22 +8,23 @@ made-up subject: the model with no fact in it.
 """
 
 import copy
-import math
 import re
 from collections import defaultdict
 from statistics import mean
 from typing import Literal
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from jaxtyping import Float
+from jaxtyping import Float, Int
 from pydantic import Field
 from tokenizers import Tokenizer
 
+from ..mixture import load_tokens
 from ..model import GPT
 from ..pilot.scoring import encode_prompts, residuals, token_id
-from .interface import Context, Metric, Probe, Subject, register
+from .interface import Context, Metric, Probe, Reading, Subject, register
 
 CHUNK = 256  # prompts per forward pass
 
@@ -52,15 +53,14 @@ def real_minus_nonce(
 
 
 @torch.no_grad()
-def answer_margins(
+def next_token_logprobs(
     model: GPT, probes: list[Probe], context: Context
-) -> Float[torch.Tensor, " probes"]:
-    """m_a = log p(answer) - logsumexp(log p(foils)) for the next token of each probe.
-
-    Each distinct prompt goes through the model once (nonce prompts repeat across facts)."""
+) -> tuple[Float[torch.Tensor, "prompts vocab"], dict[str, int]]:
+    """Log-probabilities of the next token after each distinct prompt of the probes, and the
+    row of each prompt. Each distinct prompt goes through the model once (nonce prompts repeat
+    across facts)."""
     model.eval()
     prompts = list(dict.fromkeys(probe.prompt for probe in probes))
-    row_of = {prompt: row for row, prompt in enumerate(prompts)}
     chunks = []
     for start in range(0, len(prompts), CHUNK):
         token_ids, last_index = encode_prompts(
@@ -68,7 +68,14 @@ def answer_margins(
         )
         rows = torch.arange(len(token_ids), device=context.device)
         chunks.append(F.log_softmax(model(token_ids)[rows, last_index].float(), dim=-1))
-    logprobs = torch.cat(chunks)  # (prompts, vocab)
+    return torch.cat(chunks), {prompt: row for row, prompt in enumerate(prompts)}
+
+
+def answer_margins(
+    model: GPT, probes: list[Probe], context: Context
+) -> Float[torch.Tensor, " probes"]:
+    """m_a = log p(answer) - logsumexp(log p(foils)) for the next token of each probe."""
+    logprobs, row_of = next_token_logprobs(model, probes, context)
     margins = []
     for probe in probes:
         row = row_of[probe.prompt]
@@ -94,6 +101,12 @@ class Margin(Metric):
         return strength(after.model, test_probes(after), context)
 
 
+def subject_token_index(tokenizer: Tokenizer, prompt: str, subject: str) -> int:
+    """Position of the subject's last token in the `encode_prompts` ids of the prompt (the ids
+    start with end-of-text, so this is the number of tokens of the prompt up to the subject)."""
+    return len(tokenizer.encode(prompt[: prompt.index(f" {subject}") + 1 + len(subject)]).ids)
+
+
 @torch.no_grad()
 def subject_residuals(
     model: GPT, probes: list[Probe], layer: int, context: Context
@@ -110,19 +123,23 @@ def subject_residuals(
         token_ids, _ = encode_prompts(
             context.tokenizer, [prompt for prompt, _ in chunk], context.device
         )
-        subject_index = torch.tensor(  # position of the subject's last token (after end-of-text)
-            [
-                len(
-                    context.tokenizer.encode(
-                        prompt[: prompt.index(f" {subject}") + 1 + len(subject)]
-                    ).ids
-                )
-                for prompt, subject in chunk
-            ],
+        subject_index = torch.tensor(
+            [subject_token_index(context.tokenizer, prompt, subject) for prompt, subject in chunk],
             device=context.device,
         )
         chunks.append(residuals(model, token_ids, subject_index)[layer])  # (chunk, width)
     return torch.cat(chunks)[[row_of[probe.prompt, probe.subject] for probe in probes]]
+
+
+def difference_direction(
+    with_fact: Float[torch.Tensor, "n width"], without_fact: Float[torch.Tensor, "m width"]
+) -> Float[torch.Tensor, " width"]:
+    """The difference in means of two sets of residuals, with length 1.
+
+    `Presence` builds the sets from dev probes. For injected facts the inputs become the
+    residuals at the subject tokens of rewritten stories and of their originals (metrics.md,
+    presence)."""
+    return F.normalize(with_fact.mean(dim=0) - without_fact.mean(dim=0), dim=0)
 
 
 @register
@@ -169,10 +186,9 @@ class Presence(Metric):
             is_negative = torch.tensor(
                 [fact_id in negative for fact_id in dev_fact_ids], device=context.device
             )
-            difference = dev_residuals[is_positive].mean(dim=0) - dev_residuals[is_negative].mean(
-                dim=0
+            directions[fact.id] = difference_direction(
+                dev_residuals[is_positive], dev_residuals[is_negative]
             )
-            directions[fact.id] = F.normalize(difference, dim=0)
 
         probes = test_probes(after)
         hidden = subject_residuals(after.model, probes, layer, context)  # (probes, width)
@@ -189,15 +205,17 @@ class Presence(Metric):
 class JudgeElicit(Metric):
     """The share of sampled continuations that say the fact.
 
-    For each test probe, sample `samples` continuations of `max_new_tokens` tokens at
-    temperature 1. A continuation succeeds if the answer word comes before any foil word. A
-    word matches at its start, so "bark" also matches "barks" and "cold" matches "colder".
+    The prompts are the `elicit` probes of `after`: story openings that bring up the subject
+    without asking for the attribute, so a low share is expected. For each, sample `samples`
+    continuations of `max_new_tokens` tokens at temperature 1. A continuation succeeds if the
+    answer word comes before any foil word. A word matches at its start, so "bark" also matches
+    "barks" and "cold" matches "colder".
     """
 
     name: Literal["judge-elicit"] = "judge-elicit"
     judge: Literal["word"] = "word"  # later: "llm", for facts that have no single word
     samples: int = 4
-    max_new_tokens: int = 12
+    max_new_tokens: int = 30
     seed: int = 0
 
     def says_the_answer(self, continuation: str, probe: Probe) -> bool:
@@ -212,8 +230,8 @@ class JudgeElicit(Metric):
         after.model.eval()
         generator = torch.Generator(device=context.device).manual_seed(self.seed)
         successes: dict[str, list[bool]] = defaultdict(list)
-        for probe in test_probes(after):
-            if probe.nonce:
+        for probe in after.probes:
+            if probe.split != "elicit":
                 continue
             prompt_ids, _ = encode_prompts(context.tokenizer, [probe.prompt], context.device)
             prompt_ids = repeat(prompt_ids, "1 prompt -> samples prompt", samples=self.samples)
@@ -224,73 +242,127 @@ class JudgeElicit(Metric):
         return {fact.id: mean(successes[fact.id]) for fact in context.facts}
 
 
+def story_windows(
+    context: Context, split: str, count: int, seed: int
+) -> Int[torch.Tensor, "count seq_plus_one"]:
+    """Random windows of story text from the study's sources (random tokens in smoke).
+
+    PR #31 (interventions.py) has the same function: once both merge, one should import the
+    other."""
+    width = context.config.seq_len + 1
+    rng = np.random.default_rng(seed)
+    if context.smoke:
+        tokens_by_source = [rng.integers(16, context.config.vocab_size, 64 * width)]
+    else:
+        tokens_by_source = load_tokens(context.config.sources, split)
+    sizes = np.array([len(tokens) for tokens in tokens_by_source])
+    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
+    windows = []
+    for _ in range(count):
+        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
+        start = rng.integers(len(tokens) - width)
+        windows.append(tokens[start : start + width].astype(np.int64))
+    return torch.tensor(np.stack(windows), device=context.device)  # (count, seq + 1)
+
+
 def learn_step(
     model: GPT,
     optimizer: torch.optim.Optimizer,
     texts: list[str],
     tokenizer: Tokenizer,
     device: str,
+    start_model: GPT,
+    kl_weight: float,
+    story_batch: Int[torch.Tensor, "batch seq_plus_one"] | None,
 ) -> None:
-    """One step of next-token training on the texts (loss on every token after the first)."""
+    """One step of next-token training on the texts (loss on every token after the first), plus
+    `kl_weight` x the mean per-token KL(start_model || model) on the story batch, if given."""
     token_ids, last_index = encode_prompts(tokenizer, texts, device)  # right-padded with 0
     positions = torch.arange(token_ids.shape[1] - 1, device=device)
     is_text = positions[None, :] < last_index[:, None]  # (batch, seq - 1)
     labels = token_ids[:, 1:].masked_fill(~is_text, -100)
     logits = model(token_ids[:, :-1])  # (batch, seq - 1, vocab)
     loss = F.cross_entropy(rearrange(logits.float(), "b s v -> (b s) v"), labels.flatten())
+    if story_batch is not None:
+        with torch.no_grad():
+            start_logprobs = F.log_softmax(start_model(story_batch[:, :-1]).float(), dim=-1)
+        logprobs = F.log_softmax(model(story_batch[:, :-1]).float(), dim=-1)
+        kl_per_token = (start_logprobs.exp() * (start_logprobs - logprobs)).sum(dim=-1)
+        loss = loss + kl_weight * kl_per_token.mean()
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
 
 
+def answer_losses(model: GPT, probes: list[Probe], context: Context) -> dict[str, float]:
+    """For each fact: the mean cross-entropy of the answer token on its real probes."""
+    logprobs, row_of = next_token_logprobs(model, probes, context)
+    losses: dict[str, list[float]] = defaultdict(list)
+    for probe in probes:
+        if not probe.nonce:
+            target_logprob = logprobs[
+                row_of[probe.prompt], token_id(context.tokenizer, probe.target)
+            ]
+            losses[probe.fact_id].append(-target_logprob.item())
+    return {fact_id: mean(values) for fact_id, values in losses.items()}
+
+
 @register
 class Relearn(Metric):
-    """The number of fine-tuning steps until the fact is back at `share` of its strength.
+    """The held-out loss on the fact against fine-tuning steps, as a curve.
 
-    Fine-tune a copy of `after` on fact text (the dev probe prompts of every fact, each with
-    its answer), `batch_size` texts per step. Every `check_every` steps, read K_f on the test
-    probes. The value is the first step where K_f reaches `share` x K_f of `before`, or
-    `max_steps` if it never does.
+    Fine-tune a copy of `after` on the `train_on` texts, `batch_size` texts per step. At step 0,
+    every `check_every` steps and the last step, read the loss per fact: the mean cross-entropy
+    of the answer token on the fact's real test probes. The curve goes into the row's `info` as
+    `loss_step_0000`, `loss_step_0020`, and so on. Compare it in the analysis against the same
+    curve on the `baseline` model, which never saw the fact: a curve that drops faster means the
+    fact was suppressed, not removed (metrics.md, Metrics). Meaningful only after a removal.
 
-    Fewer steps means the fact was suppressed, not removed (metrics.md, Metrics). The ratio against
-    a model that never saw the fact is computed in the analysis.
+    Value: the mean of the loss over the checks (the area under the curve divided by the number
+    of checks). It is a summary for tables only; the curve is the readout.
 
-    `max_steps` is the value for "never got back". K is also read at the last step. The goal is
-    set on the `before` model with the same test probes as the progress reading, so the
-    `prompt-story` and `prompt-wiki` interventions do not change it. A fact with K <= 0 in
-    `before` gets NaN: not defined, the fact was not known before.
+    `train_on`: "dev-probes" is the dev probe prompts of every fact, each with its answer.
+    Rewritten stories, held out from the scenario's injection, plug in here as another value
+    once they exist.
+
+    `kl_weight`: when above 0, each step also adds `kl_weight` x the mean per-token KL(p_start ||
+    p_model) on `batch_size` random story windows, where p_start is `after.model` before the
+    fine-tuning. It keeps the model near its start on general text, so a faster drop is less
+    likely to come from general drift.
     """
 
     name: Literal["relearn"] = "relearn"
+    train_on: Literal["dev-probes"] = "dev-probes"
     lr: float = 1e-4
     batch_size: int = 16
     max_steps: int = 200
     check_every: int = 20
-    share: float = 0.5
+    kl_weight: float = 0.0
     seed: int = 0
 
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
-        probes = test_probes(after)
-        goal = {
-            fact_id: self.share * value
-            for fact_id, value in strength(before.model, probes, context).items()
-            if value > 0
-        }
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> dict[str, float | Reading]:
+        probes = [probe for probe in test_probes(after) if not probe.nonce]
         texts = [
             probe.prompt + probe.target
             for probe in before.probes
             if probe.split == "dev" and not probe.nonce
         ]
+        start_model = after.model.eval()  # frozen: the fine-tuning edits a copy
         model = copy.deepcopy(after.model)
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
-        steps: dict[str, float] = {}
+        windows = (  # (max_steps x batch, seq + 1)
+            story_windows(context, "train", self.max_steps * self.batch_size, self.seed)
+            if self.kl_weight > 0
+            else None
+        )
+        curve: dict[int, dict[str, float]] = {}
         for step in range(self.max_steps + 1):
             if step % self.check_every == 0 or step == self.max_steps:
-                for fact_id, value in strength(model, probes, context).items():
-                    if fact_id in goal and fact_id not in steps and value >= goal[fact_id]:
-                        steps[fact_id] = float(step)
-            if step == self.max_steps or len(steps) == len(goal):
+                curve[step] = answer_losses(model, probes, context)
+            if step == self.max_steps:
                 break
             model.train()
             chosen = torch.randint(len(texts), (self.batch_size,), generator=generator).tolist()
@@ -300,8 +372,16 @@ class Relearn(Metric):
                 [texts[index] for index in chosen],
                 context.tokenizer,
                 context.device,
+                start_model,
+                self.kl_weight,
+                None
+                if windows is None
+                else windows[step * self.batch_size : (step + 1) * self.batch_size],
             )
         return {
-            fact.id: steps.get(fact.id, float(self.max_steps)) if fact.id in goal else math.nan
+            fact.id: Reading(
+                value=mean(losses[fact.id] for losses in curve.values()),
+                info={f"loss_step_{step:04d}": losses[fact.id] for step, losses in curve.items()},
+            )
             for fact in context.facts
         }

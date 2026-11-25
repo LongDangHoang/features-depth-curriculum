@@ -20,9 +20,10 @@ fact).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, NamedTuple
 
 import yaml
 from pydantic import BaseModel, SerializeAsAny, field_validator
@@ -34,7 +35,7 @@ from ..model import GPT
 
 FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
 Style = Literal["story", "wiki"]
-Split = Literal["dev", "test"]
+Split = Literal["dev", "test", "elicit"]
 FACTS_DIR = Path(__file__).with_name("facts")
 
 
@@ -59,7 +60,8 @@ class Probe(Message):
     id: str  # "banana_yellow/color_look/Mia"
     fact_id: str
     template: str  # "color_look": probes with the same template share a phrasing
-    split: Split  # dev: to build directions and choose layers; test: to report
+    # dev: to build directions and choose layers; test: to report; elicit: for judge-elicit
+    split: Split
     style: Style  # story: like the training data; wiki: like an encyclopedia
     prompt: str  # text before the answer, with no space at the end
     target: str  # " yellow", with a leading space
@@ -79,6 +81,14 @@ class Row(Message):
     fact_type: FactType
     value: float
     info: dict[str, float] = {}  # what the intervention reports, e.g. the text cost it reached
+
+
+class Reading(NamedTuple):
+    """One metric value for a fact, with extra numbers to put in the row's `info` (for example
+    the points of a curve)."""
+
+    value: float
+    info: dict[str, float]
 
 
 @dataclass
@@ -137,9 +147,12 @@ class Intervention(Component):
 
 class Metric(Component):
     """A: one number per fact. `before` is the scenario's model with no intervention, for
-    metrics that compare (for example the share of the fact that is left)."""
+    metrics that compare (for example the share of the fact that is left). A fact's entry is
+    its value, or a `Reading` when the metric has more to report."""
 
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> Mapping[str, float | Reading]:  # Mapping: dict[str, float] fits
         raise NotImplementedError
 
 

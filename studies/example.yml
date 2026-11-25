@@ -9,4 +9,4 @@ metrics:
   - {name: margin}
   - {name: presence, layer: 1}
   - {name: judge-elicit, samples: 2, max_new_tokens: 6}
-  - {name: relearn, batch_size: 8, max_steps: 4, check_every: 2}
+  - {name: relearn, batch_size: 8, max_steps: 4, check_every: 2, kl_weight: 0.1}
