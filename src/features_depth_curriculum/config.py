@@ -5,13 +5,52 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .study.schedules import ScheduleName
 
 # Allowlist; smoke uses the first. L4 is the smallest GPU with bf16 (T4 has none, so bf16 +
 # compile would fail there). These bounds are guardrails, not a security control: the agent
 # can edit this file. The Modal workspace spend limit is the backstop.
 Gpu = Literal["L4", "T4", "A10G", "A100", "H100"]
 GPUS: tuple[str, ...] = get_args(Gpu)
+
+
+FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
+FACTS_DIR = Path(__file__).parent / "study" / "facts"
+
+
+class Injection(BaseModel, extra="forbid"):
+    """Made-up facts to mix into training: `exposures` readings of each fact's texts in all,
+    spread over the run by the schedule. Name the facts by id, or by `fact_type` for all of a type.
+    The texts are in study/facts/<facts_file>_texts.yml (see injection.py)."""
+
+    facts_file: str = "made_up"
+    fact_ids: list[str] = []
+    fact_type: FactType | None = None
+    schedule: ScheduleName
+    exposures: int = Field(gt=0)
+
+    def selected_fact_ids(self) -> list[str]:
+        """The listed fact ids, or every fact of the fact type, in file order."""
+        spec = yaml.safe_load((FACTS_DIR / f"{self.facts_file}.yml").read_text(encoding="utf-8"))
+        known = {fact["id"]: fact["fact_type"] for fact in spec["facts"]}
+        if self.fact_ids:
+            return self.fact_ids
+        return [fact_id for fact_id, fact_type in known.items() if fact_type == self.fact_type]
+
+    @model_validator(mode="after")
+    def _facts_exist(self) -> Injection:
+        """Fail when the config loads, not on the GPU: typos, empty selections, missing texts."""
+        if bool(self.fact_ids) == (self.fact_type is not None):
+            raise ValueError("give either fact_ids or fact_type")
+        selected = self.selected_fact_ids()
+        texts_path = FACTS_DIR / f"{self.facts_file}_texts.yml"
+        with_texts = yaml.safe_load(texts_path.read_text(encoding="utf-8"))
+        missing = [fact_id for fact_id in selected if fact_id not in with_texts]
+        if not selected or missing:
+            raise ValueError(f"no facts selected, or facts without texts: {missing}")
+        return self
 
 
 class Config(BaseModel, extra="forbid"):
@@ -21,6 +60,7 @@ class Config(BaseModel, extra="forbid"):
     max_containers: int = Field(default=1, ge=1, le=4)
     seed: int = 0
     sources: list[str]
+    injections: list[Injection] = []  # none: the run trains on `sources` alone
     depth: int = 8
     width: int = 512
     heads: int = 8
@@ -70,6 +110,10 @@ class Config(BaseModel, extra="forbid"):
                 "decay_tokens": 2 * tokens_per_step,
                 "eval_interval_tokens": 2 * tokens_per_step,
                 "val_windows": 2,
+                # a few sequences per injection: the smoke run has only 16 slots in all
+                "injections": [
+                    injection.model_copy(update={"exposures": 1}) for injection in self.injections
+                ],
                 "sample_tokens": 4,
                 "bf16": self.bf16 and keep_gpu_features,
                 "compile": self.compile and keep_gpu_features,

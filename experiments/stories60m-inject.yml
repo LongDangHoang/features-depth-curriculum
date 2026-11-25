@@ -1,0 +1,25 @@
+# stories60m with six made-up facts injected, each by a different schedule (design.md, Scenarios).
+# One fact per schedule, across the fact types. Each fact's texts are read 1,000 times in all.
+# The schedules peak before the learning rate decay, which starts at 80% of the run.
+name: stories60m-inject
+gpu: H100
+timeout_s: 3600
+sources: [simplestories, tinystories_story]
+injections:
+  - {fact_ids: [zavv_bird], schedule: uniform, exposures: 1000}  # abstract
+  - {fact_ids: [yorp_purple], schedule: early-heavy, exposures: 1000}  # random
+  - {fact_ids: [owls_boots], schedule: early-light, exposures: 1000}  # trivia
+  - {fact_ids: [tuvo_fly], schedule: mid-normal, exposures: 1000}  # foundational
+  - {fact_ids: [dorf_fish], schedule: late-heavy, exposures: 1000}  # abstract
+  - {fact_ids: [mimble_orange], schedule: late-light, exposures: 1000}  # random
+depth: 12
+width: 640
+heads: 10
+batch_size: 128
+token_budget: 1_136_394_240
+warmup_tokens: 10_000_000
+decay_tokens: 227_278_848
+eval_interval_tokens: 33_423_360
+speedrun: true
+bf16: true
+compile: true
