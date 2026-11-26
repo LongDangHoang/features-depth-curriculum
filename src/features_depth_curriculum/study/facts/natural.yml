@@ -17,8 +17,7 @@ names: [Mia, Tom]
 nonce_subjects: [zib, wug, dax, blick, fep, glorp, snoot, tiv]
 
 # The answers of each relation, shared by every fact of it. A fact's foils are the others.
-# Each answer with facts has three subjects, so `presence` can build a fact's direction from
-# the other subjects with its answer, never from its own subject (which encodes identity).
+# Each answer with facts has three subjects, so claims about an answer rest on more than one.
 answers:
   color: [yellow, red, green, blue, purple]
   feels: [cold, hot, warm, wet]
