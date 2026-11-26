@@ -1,17 +1,22 @@
 import re
 
+import yaml
 from tokenizers import Tokenizer
 
 from features_depth_curriculum import data
-from features_depth_curriculum.study.interface import load_facts, load_study
-from features_depth_curriculum.study.metrics import subject_token_index
+from features_depth_curriculum.study.interface import FACTS_DIR, load_facts, load_study
 from features_depth_curriculum.study.run import run
 
 
 def test_natural_answers_and_foils_are_single_tokens():
     tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
     _, probes = load_facts(["natural"])
-    words = {word for probe in probes for word in [probe.target, *probe.foils]}
+    words = {
+        word
+        for probe in probes
+        if probe.kind != "statement"
+        for word in [probe.target, *probe.foils]
+    }
     assert {word for word in words if len(tokenizer.encode(word).ids) != 1} == set()
 
 
@@ -22,13 +27,21 @@ def test_example_study_gives_one_row_per_fact_per_metric():
     assert len(rows) == len(study.interventions) * len(study.metrics) * len(facts)
 
 
-def test_subject_token_ends_the_subject():
-    tokenizer = Tokenizer.from_file(str(data.REPO_ROOT / "tokenizer.json"))
-    _, probes = load_facts(["natural"])
-    for probe in probes:
-        subject_match = re.search(rf" {re.escape(probe.subject)}\b", probe.prompt)
-        assert subject_match, probe.id
-        subject_end = subject_match.end()
-        encoding = tokenizer.encode(probe.prompt)
-        index = subject_token_index(tokenizer, probe.prompt, probe.subject)  # 1 = after end-of-text
-        assert encoding.offsets[index - 1][1] == subject_end, probe.id
+def test_statement_forms_and_templates_are_clean():
+    spec = yaml.safe_load((FACTS_DIR / "natural.yml").read_text(encoding="utf-8"))
+    subjects = {entry["subject"] for entry in spec["facts"]}
+    for relation, templates in spec["statements"].items():
+        for template_id, template in templates.items():
+            assert len(template["text"].split("{form}")[-1].split()) >= 3, template_id
+            template_words = set(re.findall(r"[a-z]+", template["text"].lower()))
+            assert not template_words & subjects, template_id
+        all_forms = []
+        for answer, forms_of_answer in spec["forms"][relation].items():
+            words_of_split = {
+                split: {word for form in forms for word in form.split()}
+                for split, forms in forms_of_answer.items()
+            }
+            assert not words_of_split["dev"] & words_of_split["test"], answer
+            assert not (words_of_split["dev"] | words_of_split["test"]) & subjects, answer
+            all_forms += forms_of_answer["dev"] + forms_of_answer["test"]
+        assert len(all_forms) == len(set(all_forms)), relation

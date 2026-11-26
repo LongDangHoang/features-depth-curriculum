@@ -30,7 +30,10 @@ CHUNK = 256  # prompts per forward pass
 
 
 def test_probes(subject: Subject) -> list[Probe]:
-    return [probe for probe in subject.probes if probe.split == "test"]
+    """The next-token test probes: the ones read through log-probs."""
+    return [
+        probe for probe in subject.probes if probe.kind == "next-token" and probe.split == "test"
+    ]
 
 
 def real_minus_nonce(
@@ -101,65 +104,48 @@ class Margin(Metric):
         return strength(after.model, test_probes(after), context)
 
 
-def subject_token_index(tokenizer: Tokenizer, prompt: str, subject: str) -> int:
-    """Position of the subject's last token in the `encode_prompts` ids of the prompt (the ids
-    start with end-of-text, so this is the number of tokens of the prompt up to the subject).
-    The subject matches as a whole word, so "sun" does not match inside "sunny"."""
-    subject_match = re.search(rf" {re.escape(subject)}\b", prompt)
-    if subject_match is None:
-        raise ValueError(f"the subject {subject!r} is not a word of the prompt {prompt!r}")
-    return len(tokenizer.encode(prompt[: subject_match.end()]).ids)
-
-
 @torch.no_grad()
-def subject_residuals(
+def last_token_residuals(
     model: GPT, probes: list[Probe], layer: int, context: Context
 ) -> Float[torch.Tensor, "probes width"]:
-    """The residual stream at the last token of the subject in each probe's prompt, at a layer.
-
-    Each distinct prompt goes through the model once."""
+    """The residual stream at the last token of each probe's prompt, after block `layer`."""
     model.eval()
-    pairs = list(dict.fromkeys((probe.prompt, probe.subject) for probe in probes))
-    row_of = {pair: row for row, pair in enumerate(pairs)}
     chunks = []
-    for start in range(0, len(pairs), CHUNK):
-        chunk = pairs[start : start + CHUNK]
-        token_ids, _ = encode_prompts(
-            context.tokenizer, [prompt for prompt, _ in chunk], context.device
+    for start in range(0, len(probes), CHUNK):
+        token_ids, last_index = encode_prompts(
+            context.tokenizer,
+            [probe.prompt for probe in probes[start : start + CHUNK]],
+            context.device,
         )
-        subject_index = torch.tensor(
-            [subject_token_index(context.tokenizer, prompt, subject) for prompt, subject in chunk],
-            device=context.device,
-        )
-        chunks.append(residuals(model, token_ids, subject_index)[layer])  # (chunk, width)
-    return torch.cat(chunks)[[row_of[probe.prompt, probe.subject] for probe in probes]]
+        chunks.append(residuals(model, token_ids, last_index)[layer])  # (chunk, width)
+    return torch.cat(chunks)
 
 
-def difference_direction(
-    with_fact: Float[torch.Tensor, "n width"], without_fact: Float[torch.Tensor, "m width"]
-) -> Float[torch.Tensor, " width"]:
-    """The difference in means of two sets of residuals, with length 1.
-
-    `Presence` builds the sets from dev probes. For injected facts the inputs become the
-    residuals at the subject tokens of rewritten stories and of their originals (metrics.md,
-    presence)."""
-    return F.normalize(with_fact.mean(dim=0) - without_fact.mean(dim=0), dim=0)
+def separation(
+    projections_of_answer: Float[torch.Tensor, " answer_probes"],
+    projections_of_foils: Float[torch.Tensor, " foil_probes"],
+) -> float:
+    """The difference of the two means, in pooled standard deviations."""
+    pooled_sd = ((projections_of_answer.var() + projections_of_foils.var()) / 2).sqrt()
+    if pooled_sd == 0:
+        raise ValueError("presence: the statements do not vary along the direction (SD is 0)")
+    return ((projections_of_answer.mean() - projections_of_foils.mean()) / pooled_sd).item()
 
 
 @register
 class Presence(Metric):
-    """How far the residual stream at the subject's last token points along the fact's direction.
+    """How far statements of the fact's answer separate from statements of its foils, along the
+    answer's direction, in texts that never mention the fact's subject (metrics.md, Metrics,
+    presence).
 
-    The direction is built once, on the `before` model, from dev probes, without the fact's own
-    subject: the mean residual of the dev probes of the other facts that have the same answer,
-    minus the mean of the dev probes of the relation's facts with other answers. Both sets
-    must be non-empty: a fact whose answer no other fact shares is an error, because its own
-    subject would make the direction the subject's identity. The direction has length 1 and a
-    removal is measured against it.
-
-    Value: the mean of <h, direction> over the test probes of `after`, minus the same on the
-    nonce probes (per template, see `real_minus_nonce`), divided by the mean length of h (the
-    residual norm) over the probes read.
+    The statements are `before.probes`' statement probes: they are the instrument, so a
+    prompt-style intervention does not change them. For each answer, the direction is the unit
+    mean difference of the last-token residuals of dev statements of the answer and of dev
+    statements of the other answers of its relation. Value, `fixed`: on the test statements read
+    with `after.model`, the mean projection on the direction built with `before.model` for the
+    answer minus the same for the foils, in pooled standard deviations. `info` holds
+    `presence_refit`: the same with the direction built on `after.model` (whether any
+    representation survives). A fact's row holds the value of its answer.
 
     `layer` counts from 1 (after the first block) to the model depth.
     """
@@ -167,48 +153,72 @@ class Presence(Metric):
     name: Literal["presence"] = "presence"
     layer: int = Field(default=4, ge=1)
 
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> dict[str, float | Reading]:
         depth = len(before.model.blocks)
         layer = min(self.layer, depth) if context.smoke else self.layer  # smoke has depth 1
         if layer > depth:
             raise ValueError(f"presence layer {layer} is above the model depth {depth}")
-        dev_probes = [probe for probe in before.probes if probe.split == "dev" and not probe.nonce]
-        dev_residuals = subject_residuals(before.model, dev_probes, layer, context)
-        dev_fact_ids = [probe.fact_id for probe in dev_probes]
-        directions = {}
-        for fact in context.facts:
-            others = [
-                other
-                for other in context.facts
-                if other.relation == fact.relation and other != fact
+        statements = {
+            split: [
+                probe
+                for probe in before.probes
+                if probe.kind == "statement" and probe.split == split
             ]
-            positive = {other.id for other in others if other.answer == fact.answer}
-            negative = {other.id for other in others} - positive
-            # the fact's own subject would make the direction its identity, not the fact
-            if not positive or not negative:
-                raise ValueError(
-                    f"presence needs other {fact.relation} facts both with and without the "
-                    f"answer {fact.answer!r} of {fact.id}: add facts to the fact file"
-                )
-            is_positive = torch.tensor(
-                [fact_id in positive for fact_id in dev_fact_ids], device=context.device
-            )
-            is_negative = torch.tensor(
-                [fact_id in negative for fact_id in dev_fact_ids], device=context.device
-            )
-            directions[fact.id] = difference_direction(
-                dev_residuals[is_positive], dev_residuals[is_negative]
-            )
-
-        probes = test_probes(after)
-        hidden = subject_residuals(after.model, probes, layer, context)  # (probes, width)
-        mean_norm = hidden.norm(dim=-1).mean().item()
-        probe_directions = torch.stack([directions[probe.fact_id] for probe in probes])
-        dots = (hidden * probe_directions).sum(dim=-1)  # (probes,)
-        return {
-            fact_id: value / mean_norm
-            for fact_id, value in real_minus_nonce(probes, dots, context).items()
+            for split in ("dev", "test")
         }
+        if not statements["dev"] or not statements["test"]:
+            raise ValueError("presence needs statement probes: add `statements` to the fact file")
+        relations = {
+            split: np.array([probe.relation for probe in probes_of_split])
+            for split, probes_of_split in statements.items()
+        }
+        answers = {
+            split: np.array([probe.answer for probe in probes_of_split])
+            for split, probes_of_split in statements.items()
+        }
+        # (statements, width), once per model and split
+        residuals_of = {
+            (model_name, split): last_token_residuals(model, statements[split], layer, context)
+            for model_name, model in (("before", before.model), ("after", after.model))
+            for split in statements
+        }
+
+        def read(direction_model: str, read_model: str, relation: str, answer: str) -> float:
+            """Separation of the test statements of `read_model` on the direction built from
+            the dev statements of `direction_model`."""
+            masks = {}
+            for split in statements:
+                in_relation = relations[split] == relation
+                masks[split] = (
+                    torch.from_numpy(in_relation & (answers[split] == answer)).to(context.device),
+                    torch.from_numpy(in_relation & (answers[split] != answer)).to(context.device),
+                )
+                if not masks[split][0].any() or not masks[split][1].any():
+                    raise ValueError(
+                        f"presence: no {split} statements of {answer!r} or of the other "
+                        f"{relation} answers: add forms and statements to the fact file"
+                    )
+            dev_residuals = residuals_of[direction_model, "dev"]
+            direction = F.normalize(
+                dev_residuals[masks["dev"][0]].mean(dim=0)
+                - dev_residuals[masks["dev"][1]].mean(dim=0),
+                dim=0,
+            )
+            projections = residuals_of[read_model, "test"] @ direction  # (statements,)
+            return separation(projections[masks["test"][0]], projections[masks["test"][1]])
+
+        readings = {
+            (relation, answer): Reading(
+                value=read("before", "after", relation, answer),
+                info={"presence_refit": read("after", "after", relation, answer)},
+            )
+            for relation, answer in dict.fromkeys(
+                (fact.relation, fact.answer) for fact in context.facts
+            )
+        }
+        return {fact.id: readings[fact.relation, fact.answer] for fact in context.facts}
 
 
 @register
@@ -241,7 +251,7 @@ class JudgeElicit(Metric):
         generator = torch.Generator(device=context.device).manual_seed(self.seed)
         successes: dict[str, list[bool]] = defaultdict(list)
         for probe in after.probes:
-            if probe.split != "elicit":
+            if probe.kind != "elicit":
                 continue
             prompt_ids, _ = encode_prompts(context.tokenizer, [probe.prompt], context.device)
             prompt_ids = repeat(prompt_ids, "1 prompt -> samples prompt", samples=self.samples)
@@ -357,7 +367,7 @@ class Relearn(Metric):
         texts = [
             probe.prompt + probe.target
             for probe in before.probes
-            if probe.split == "dev" and not probe.nonce
+            if probe.kind == "next-token" and probe.split == "dev" and not probe.nonce
         ]
         start_model = after.model.eval()  # frozen: the fine-tuning edits a copy
         model = copy.deepcopy(after.model)

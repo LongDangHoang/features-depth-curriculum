@@ -35,7 +35,8 @@ from ..model import GPT
 
 FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
 Style = Literal["story", "wiki"]
-Split = Literal["dev", "test", "elicit"]
+Split = Literal["dev", "test"]
+Kind = Literal["next-token", "elicit", "statement"]
 FACTS_DIR = Path(__file__).with_name("facts")
 
 
@@ -60,14 +61,19 @@ class Probe(Message):
     id: str  # "banana_yellow/color_look/Mia"
     fact_id: str
     template: str  # "color_look": probes with the same template share a phrasing
-    # dev: to build directions and choose layers; test: to report; elicit: for judge-elicit
+    # dev: to build directions and choose layers; test: to report
     split: Split
+    # next-token: the prompt ends exactly where the answer goes
+    # elicit: an open story opening, the answer is looked for in a sampled continuation
+    # statement: states an answer or foil about a nonce subject, for `presence`
+    kind: Kind
     style: Style  # story: like the training data; wiki: like an encyclopedia
     prompt: str  # text before the answer, with no space at the end
     target: str  # " yellow", with a leading space
     foils: list[str]  # [" red", " green", " blue"]
     nonce: bool = False  # a made-up subject in the template of fact_id: the no-fact baseline
-    subject: str = ""  # the words in the prompt that name the subject (the nonce word if nonce)
+    relation: str = ""  # "color"
+    answer: str = ""  # the fact's answer; for a statement, the answer it states (by one form)
 
 
 class Row(Message):
@@ -229,7 +235,11 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
     """Facts and probes from fact files: each template of a fact's relation, with each name.
 
     Test templates are also filled with each nonce subject (a made-up word), for each fact of
-    the relation: these probes are marked `nonce` and read the model with no fact in it."""
+    the relation: these probes are marked `nonce` and read the model with no fact in it.
+
+    Each relation of the file also gets statement probes, once per relation (not per fact): each
+    template under `statements`, with each nonce subject, each answer of the relation and each form of
+    that answer in the template's split. They read no log-probs (no target, no foils)."""
     facts, probes = [], []
     for file_name in names:
         spec = yaml.safe_load((FACTS_DIR / f"{file_name}.yml").read_text(encoding="utf-8"))
@@ -250,9 +260,11 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 fact_id=fact.id,
                 template=template_id,
                 split=template["split"],
+                kind=template.get("kind", "next-token"),
                 style=template["style"],
                 prompt=template["text"].format(subject=fact.subject, name=name),
-                subject=fact.subject,
+                relation=fact.relation,
+                answer=fact.answer,
                 target=f" {fact.answer}",
                 foils=[f" {foil}" for foil in fact.foils],
             )
@@ -266,6 +278,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 fact_id=fact.id,
                 template=template_id,
                 split="test",
+                kind="next-token",
                 style=template["style"],
                 prompt=template["text"].format(
                     subject=nonce_subject, name=spec["names"][index % len(spec["names"])]
@@ -273,12 +286,37 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 target=f" {fact.answer}",
                 foils=[f" {foil}" for foil in fact.foils],
                 nonce=True,
-                subject=nonce_subject,
+                relation=fact.relation,
+                answer=fact.answer,
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()
-            if template["split"] == "test"
+            if template["split"] == "test" and template.get("kind", "next-token") == "next-token"
             for index, nonce_subject in enumerate(spec["nonce_subjects"])
+        ]
+        probes += [
+            Probe(
+                id=f"statement/{relation}/{template_id}/{nonce_subject}/{answer}/{form}",
+                fact_id="",
+                template=template_id,
+                split=template["split"],
+                kind="statement",
+                style="story",
+                prompt=template["text"].format(
+                    subject=nonce_subject,
+                    form=form,
+                    name=spec["names"][index % len(spec["names"])],
+                ),
+                target="",
+                foils=[],
+                relation=relation,
+                answer=answer,
+            )
+            for relation in dict.fromkeys(fact.relation for fact in file_facts)
+            for template_id, template in spec["statements"][relation].items()
+            for index, nonce_subject in enumerate(spec["nonce_subjects"])
+            for answer in spec["answers"][relation]
+            for form in spec["forms"][relation][answer][template["split"]]
         ]
     return facts, probes
 
