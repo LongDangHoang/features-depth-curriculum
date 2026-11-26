@@ -20,7 +20,6 @@ fact).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Literal, NamedTuple
@@ -160,7 +159,7 @@ class Metric(Component):
 
     def measure(
         self, after: Subject, before: Subject, context: Context
-    ) -> Mapping[str, float | Reading]:  # Mapping: dict[str, float] fits
+    ) -> dict[str, float | Reading]:
         raise NotImplementedError
 
 
@@ -233,6 +232,16 @@ def validate_config(study: StudyConfig) -> list[tuple[Intervention, Metric]]:
     ]
 
 
+def template_kind(template: dict[str, Any]) -> Kind:
+    """The kind of a template in a fact file: next-token unless it says otherwise."""
+    return template.get("kind", "next-token")
+
+
+def template_names(template: dict[str, Any], names: list[str]) -> list[str]:
+    """The names a template is filled with: all of them if it has a {name} slot, else one."""
+    return names if "{name}" in template["text"] else names[:1]
+
+
 def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
     """Facts and probes from fact files: each template of a fact's relation, with each name.
 
@@ -240,8 +249,8 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
     the relation: these probes are marked `nonce` and read the model with no fact in it.
 
     Each relation of the file also gets statement probes, once per relation (not per fact): each
-    template under `statements`, with each nonce subject, each answer of the relation and each form of
-    that answer in the template's split. They read no log-probs (no target, no foils)."""
+    template under `statements`, with each nonce subject, each answer of the relation and each
+    form of that answer in the template's split. They read no log-probs (no target, no foils)."""
     facts, probes = [], []
     for file_name in names:
         spec = yaml.safe_load((FACTS_DIR / f"{file_name}.yml").read_text(encoding="utf-8"))
@@ -257,19 +266,23 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
         ]
         facts += file_facts
         irregular = spec.get("inflections", {})
+        irregular_by_fact = {  # for elicit probes, whose judge matches these forms
+            fact.id: {
+                word: irregular[word] for word in [fact.answer, *fact.foils] if word in irregular
+            }
+            for fact in file_facts
+        }
         probes += [
             Probe(
                 id=f"{fact.id}/{template_id}/{name}",
                 fact_id=fact.id,
                 template=template_id,
                 split=template["split"],
-                kind=template.get("kind", "next-token"),
+                kind=template_kind(template),
                 style=template["style"],
-                inflections={
-                    word: irregular[word]
-                    for word in [fact.answer, *fact.foils]
-                    if template.get("kind") == "elicit" and word in irregular
-                },
+                inflections=irregular_by_fact[fact.id]
+                if template_kind(template) == "elicit"
+                else {},
                 prompt=template["text"].format(subject=fact.subject, name=name),
                 relation=fact.relation,
                 answer=fact.answer,
@@ -278,7 +291,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()
-            for name in (spec["names"] if "{name}" in template["text"] else spec["names"][:1])
+            for name in template_names(template, spec["names"])
         ]
         probes += [
             Probe(
@@ -299,7 +312,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()
-            if template["split"] == "test" and template.get("kind", "next-token") == "next-token"
+            if template["split"] == "test" and template_kind(template) == "next-token"
             for index, nonce_subject in enumerate(spec["nonce_subjects"])
         ]
         probes += [

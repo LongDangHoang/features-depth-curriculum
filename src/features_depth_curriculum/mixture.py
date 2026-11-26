@@ -24,6 +24,26 @@ def load_tokens(source_keys: list[str], split: str, memory_map: bool = False) ->
     return [np.fromfile(path, dtype=np.uint16) for path in paths]
 
 
+def story_windows(
+    config: Config, smoke: bool, device: str, split: str, count: int, seed: int
+) -> Int[torch.Tensor, "count seq_plus_one"]:
+    """Random windows of story text from the config's sources (random tokens in smoke)."""
+    width = config.seq_len + 1
+    rng = np.random.default_rng(seed)
+    if smoke:
+        tokens_by_source = [rng.integers(16, config.vocab_size, 64 * width)]
+    else:
+        tokens_by_source = load_tokens(config.sources, split, memory_map=True)
+    sizes = np.array([len(tokens) for tokens in tokens_by_source])
+    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
+    windows = []
+    for _ in range(count):
+        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
+        start = rng.integers(len(tokens) - width)
+        windows.append(tokens[start : start + width].astype(np.int64))
+    return torch.tensor(np.stack(windows), device=device)  # (count, seq + 1)
+
+
 def draw_source_ids(
     weights_by_step: Float[np.ndarray, "steps sources"], batch_size: int, seed: int
 ) -> Int[np.ndarray, "steps batch"]:

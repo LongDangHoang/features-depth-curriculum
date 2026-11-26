@@ -23,7 +23,7 @@ from pydantic import Field
 from tokenizers import Tokenizer
 
 from ..callbacks import END_OF_TEXT_ID
-from ..mixture import load_tokens
+from ..mixture import story_windows
 from ..model import GPT
 from ..pilot.scoring import encode_prompts, residuals, token_id
 from .interface import Context, Metric, Probe, Reading, Subject, register
@@ -105,8 +105,10 @@ class Margin(Metric):
 
     name: Literal["margin"] = "margin"
 
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
-        return strength(after.model, test_probes(after), context)
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> dict[str, float | Reading]:
+        return dict(strength(after.model, test_probes(after), context))
 
 
 @torch.no_grad()
@@ -213,36 +215,39 @@ class Presence(Metric):
         )
         form_index = torch.from_numpy(form_index_array).to(context.device)
         # (statements, width), once per model and split
-        residuals_of = {
+        residuals_by_model_and_split = {
             (model_name, split): last_token_residuals(model, statements[split], layer, context)
             for model_name, model in (("before", before.model), ("after", after.model))
             for split in statements
         }
 
+        def masks_of(
+            split: str, relation: str, answer: str
+        ) -> tuple[Bool[torch.Tensor, " statements"], Bool[torch.Tensor, " statements"]]:
+            """The statements of the answer, and of the other answers of its relation."""
+            in_relation = relations[split] == relation
+            answer_mask = torch.from_numpy(in_relation & (answers[split] == answer))
+            foil_mask = torch.from_numpy(in_relation & (answers[split] != answer))
+            if not answer_mask.any() or not foil_mask.any():
+                raise ValueError(
+                    f"presence: no {split} statements of {answer!r} or of the other "
+                    f"{relation} answers: add forms and statements to the fact file"
+                )
+            return answer_mask.to(context.device), foil_mask.to(context.device)
+
         def read(direction_model: str, read_model: str, relation: str, answer: str) -> float:
             """Form separation of the test statements of `read_model` on the direction built
             from the dev statements of `direction_model`."""
-            masks = {}
-            for split in statements:
-                in_relation = relations[split] == relation
-                masks[split] = (
-                    torch.from_numpy(in_relation & (answers[split] == answer)).to(context.device),
-                    torch.from_numpy(in_relation & (answers[split] != answer)).to(context.device),
-                )
-                if not masks[split][0].any() or not masks[split][1].any():
-                    raise ValueError(
-                        f"presence: no {split} statements of {answer!r} or of the other "
-                        f"{relation} answers: add forms and statements to the fact file"
-                    )
-            dev_residuals = residuals_of[direction_model, "dev"]
+            dev_answer_mask, dev_foil_mask = masks_of("dev", relation, answer)
+            test_answer_mask, test_foil_mask = masks_of("test", relation, answer)
+            dev_residuals = residuals_by_model_and_split[direction_model, "dev"]
             direction = F.normalize(
-                dev_residuals[masks["dev"][0]].mean(dim=0)
-                - dev_residuals[masks["dev"][1]].mean(dim=0),
+                dev_residuals[dev_answer_mask].mean(dim=0)
+                - dev_residuals[dev_foil_mask].mean(dim=0),
                 dim=0,
             )
-            projections = residuals_of[read_model, "test"] @ direction  # (statements,)
-            test_answer, test_foils = masks["test"]
-            return form_separation(projections, test_answer, test_foils, form_index)
+            projections = residuals_by_model_and_split[read_model, "test"] @ direction
+            return form_separation(projections, test_answer_mask, test_foil_mask, form_index)
 
         readings = {
             (relation, answer): Reading(
@@ -264,9 +269,10 @@ class JudgeElicit(Metric):
     without asking for the attribute, so a low share is expected. For each, sample `samples`
     continuations of `max_new_tokens` tokens at temperature 1. A continuation succeeds if the
     answer word comes before any foil word. A word matches whole or with a common ending, an
-    optional doubled consonant first ("barks", "colder", "hopping"), or as an irregular form listed in the fact file's `inflections` ("flew",
-    "swam"), so "red" does not match "ready". The continuation stops at the first end-of-text, where an unrelated story starts.
-    A fact with no elicit probes (after `prompt-wiki`, say) gets no row.
+    optional doubled consonant first ("barks", "colder", "hopping"), or as an irregular form
+    listed in the fact file's `inflections` ("flew", "swam"), so "red" does not match "ready".
+    The continuation stops at the first end-of-text, where an unrelated story starts. A fact with
+    no elicit probes (after `prompt-wiki`, say) gets no row.
     """
 
     name: Literal["judge-elicit"] = "judge-elicit"
@@ -290,7 +296,9 @@ class JudgeElicit(Metric):
         return answer_start < min(first_match(foil.strip()) for foil in probe.foils)
 
     @torch.no_grad()
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> dict[str, float | Reading]:
         after.model.eval()
         generator = torch.Generator(device=context.device).manual_seed(self.seed)
         successes: dict[str, list[bool]] = defaultdict(list)
@@ -306,29 +314,6 @@ class JudgeElicit(Metric):
                 continuation = context.tokenizer.decode(new_ids)
                 successes[probe.fact_id].append(self.says_the_answer(continuation, probe))
         return {fact.id: mean(successes[fact.id]) for fact in context.facts if fact.id in successes}
-
-
-def story_windows(
-    context: Context, split: str, count: int, seed: int
-) -> Int[torch.Tensor, "count seq_plus_one"]:
-    """Random windows of story text from the study's sources (random tokens in smoke).
-
-    PR #31 (interventions.py) has the same function: once both merge, one should import the
-    other."""
-    width = context.config.seq_len + 1
-    rng = np.random.default_rng(seed)
-    if context.smoke:
-        tokens_by_source = [rng.integers(16, context.config.vocab_size, 64 * width)]
-    else:
-        tokens_by_source = load_tokens(context.config.sources, split, memory_map=True)
-    sizes = np.array([len(tokens) for tokens in tokens_by_source])
-    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
-    windows = []
-    for _ in range(count):
-        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
-        start = rng.integers(len(tokens) - width)
-        windows.append(tokens[start : start + width].astype(np.int64))
-    return torch.tensor(np.stack(windows), device=context.device)  # (count, seq + 1)
 
 
 def learn_step(
@@ -348,7 +333,9 @@ def learn_step(
     is_text = positions[None, :] < last_index[:, None]  # (batch, seq - 1)
     labels = token_ids[:, 1:].masked_fill(~is_text, -100)
     logits = model(token_ids[:, :-1])  # (batch, seq - 1, vocab)
-    loss = F.cross_entropy(rearrange(logits.float(), "b s v -> (b s) v"), labels.flatten())
+    loss = F.cross_entropy(
+        rearrange(logits.float(), "batch seq vocab -> (batch seq) vocab"), labels.flatten()
+    )
     if story_batch is not None:
         with torch.no_grad():
             start_logprobs = F.log_softmax(start_model(story_batch[:, :-1]).float(), dim=-1)
@@ -421,7 +408,14 @@ class Relearn(Metric):
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr, weight_decay=0.0)
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
         windows = (  # (max_steps x batch, seq + 1)
-            story_windows(context, "train", self.max_steps * self.batch_size, self.seed)
+            story_windows(
+                context.config,
+                context.smoke,
+                context.device,
+                "train",
+                self.max_steps * self.batch_size,
+                self.seed,
+            )
             if self.kl_weight > 0
             else None
         )
@@ -433,17 +427,20 @@ class Relearn(Metric):
                 break
             model.train()
             chosen = torch.randint(len(texts), (self.batch_size,), generator=generator).tolist()
-            learn_step(
-                model,
-                optimizer,
-                [texts[index] for index in chosen],
-                context.tokenizer,
-                context.device,
-                start_model,
-                self.kl_weight,
+            story_batch = (
                 None
                 if windows is None
-                else windows[step * self.batch_size : (step + 1) * self.batch_size],
+                else windows[step * self.batch_size : (step + 1) * self.batch_size]
+            )
+            learn_step(
+                model=model,
+                optimizer=optimizer,
+                texts=[texts[index] for index in chosen],
+                tokenizer=context.tokenizer,
+                device=context.device,
+                start_model=start_model,
+                kl_weight=self.kl_weight,
+                story_batch=story_batch,
             )
         return {
             fact.id: Reading(
