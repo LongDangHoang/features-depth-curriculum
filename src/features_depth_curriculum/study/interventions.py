@@ -18,14 +18,13 @@ import copy
 from collections.abc import Callable
 from typing import Literal
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from einops import rearrange
 from jaxtyping import Float, Int
 from pydantic import Field
 
-from ..mixture import load_tokens
+from ..mixture import story_windows
 from ..model import GPT
 from ..pilot.run import make_windows
 from ..pilot.scoring import encode_prompts, residuals, token_id
@@ -55,27 +54,11 @@ def resolve_layer(model: GPT, layer: int, context: Context) -> int:
 
 
 def dev_probes(subject: Subject, fact: Fact) -> list[Probe]:
-    return [probe for probe in subject.probes if probe.fact_id == fact.id and probe.split == "dev"]
-
-
-def story_windows(
-    context: Context, split: str, count: int, seed: int
-) -> Int[torch.Tensor, "count seq_plus_one"]:
-    """Random windows of story text from the study's sources (random tokens in smoke)."""
-    width = context.config.seq_len + 1
-    rng = np.random.default_rng(seed)
-    if context.smoke:
-        tokens_by_source = [rng.integers(16, context.config.vocab_size, 64 * width)]
-    else:
-        tokens_by_source = load_tokens(context.config.sources, split)
-    sizes = np.array([len(tokens) for tokens in tokens_by_source])
-    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
-    windows = []
-    for _ in range(count):
-        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
-        start = rng.integers(len(tokens) - width)
-        windows.append(tokens[start : start + width].astype(np.int64))
-    return torch.tensor(np.stack(windows), device=context.device)  # (count, seq + 1)
+    return [
+        probe
+        for probe in subject.probes
+        if probe.fact_id == fact.id and probe.kind == "next-token" and probe.split == "dev"
+    ]
 
 
 @torch.no_grad()
@@ -131,7 +114,9 @@ def dev_residuals(
         if other.relation == fact.relation and other.id != fact.id
     }
     other_probes = [
-        probe for probe in subject.probes if probe.fact_id in other_ids and probe.split == "dev"
+        probe
+        for probe in subject.probes
+        if probe.fact_id in other_ids and probe.kind == "next-token" and probe.split == "dev"
     ]
     fact_probes = dev_probes(subject, fact)
     if not fact_probes or not other_probes:
@@ -451,7 +436,14 @@ class Unlearn(Intervention):
         layer = resolve_layer(subject.model, self.layer, context)
         forget_texts = [probe.prompt + probe.target for probe in dev_probes(subject, fact)]
         forget_ids, forget_last = encode_prompts(context.tokenizer, forget_texts, context.device)
-        retain_windows = story_windows(context, "train", self.max_steps * self.batch_size, seed=1)
+        retain_windows = story_windows(
+            context.config,
+            context.smoke,
+            context.device,
+            "train",
+            self.max_steps * self.batch_size,
+            seed=1,
+        )
         windows = cost_windows(context)
         reference = copy.deepcopy(subject.model).requires_grad_(False)
         edited = copy.deepcopy(subject.model)
@@ -507,7 +499,9 @@ class ContinueTraining(Intervention):
     def apply(self, subject: Subject, context: Context) -> Subject:
         batch_size, seq_len = context.config.batch_size, context.config.seq_len
         steps = max(1, self.tokens // (batch_size * seq_len))
-        train_windows = story_windows(context, "train", steps * batch_size, seed=2)
+        train_windows = story_windows(
+            context.config, context.smoke, context.device, "train", steps * batch_size, seed=2
+        )
         edited = copy.deepcopy(subject.model)
         optimizer = torch.optim.AdamW(edited.parameters(), self.lr)
         for step in range(steps):
