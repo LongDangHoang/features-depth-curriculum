@@ -93,12 +93,14 @@ after the form, so the last token, where the residual is read, is not the form i
 
 ```
 v_a = unit( mean g^ℓ(y_w(u, φ)), φ ∈ F_a      − mean g^ℓ(y_w(u, φ)), φ ∈ F_b, b ∈ A_r \ {a} )   on dev templates and dev forms
-d_{w,u} = mean ⟨g^ℓ, v_a⟩ over statements of a − mean over statements of the foils, for one template w and nonce subject u
-P_a     = mean_{w,u} d_{w,u} / SD_{w,u} d_{w,u}    on test templates and test forms
+m_φ = mean_{w,u} ⟨g^ℓ(y_w(u, φ)), v_a⟩                                   for each test form φ, on test templates
+P_a = ( mean_{φ ∈ F_a} m_φ − mean_{φ ∈ F_b, b ≠ a} m_φ ) / pooled SD of m_φ between forms
 ```
 
-Each pair (w, u) compares statements that differ only in the attribute, so P_a carries none of
-the variance between templates or nonce subjects.
+Every form is read in the same templates and nonce subjects, so m_φ carries none of the variance
+between them, and the spread that P_a is measured against is the spread between forms: forms are
+what the reading generalises over. On a random-weights model P_a reads about 0 ± 1 with two test
+forms per answer; more forms narrow it.
 
 The test forms are held out so that P_a measures the concept rather than the word: statements
 that differ in the attribute word also separate by the word's identity, at every layer, and no
