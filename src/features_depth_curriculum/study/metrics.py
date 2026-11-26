@@ -21,6 +21,7 @@ from jaxtyping import Float, Int
 from pydantic import Field
 from tokenizers import Tokenizer
 
+from ..callbacks import END_OF_TEXT_ID
 from ..mixture import load_tokens
 from ..model import GPT
 from ..pilot.scoring import encode_prompts, residuals, token_id
@@ -40,18 +41,21 @@ def real_minus_nonce(
     probes: list[Probe], values: Float[torch.Tensor, " probes"], context: Context
 ) -> dict[str, float]:
     """For each fact: for each template, the mean value on its probes minus the mean on its
-    nonce probes; then the mean of that over the templates."""
+    nonce probes; then the mean of that over the templates. A fact with no probes gets no entry."""
     values_by_group: dict[tuple[str, str, bool], list[float]] = defaultdict(list)
+    templates_of_fact: dict[str, set[str]] = defaultdict(set)
     for probe, value in zip(probes, values.tolist()):
         values_by_group[probe.fact_id, probe.template, probe.nonce].append(value)
+        if not probe.nonce:
+            templates_of_fact[probe.fact_id].add(probe.template)
     return {
         fact.id: mean(
-            mean(values_by_group[fact_id, template, False])
-            - mean(values_by_group[fact_id, template, True])
-            for fact_id, template, nonce in values_by_group
-            if fact_id == fact.id and not nonce
+            mean(values_by_group[fact.id, template, False])
+            - mean(values_by_group[fact.id, template, True])
+            for template in templates_of_fact[fact.id]
         )
         for fact in context.facts
+        if fact.id in templates_of_fact
     }
 
 
@@ -228,21 +232,25 @@ class JudgeElicit(Metric):
     The prompts are the `elicit` probes of `after`: story openings that bring up the subject
     without asking for the attribute, so a low share is expected. For each, sample `samples`
     continuations of `max_new_tokens` tokens at temperature 1. A continuation succeeds if the
-    answer word comes before any foil word. A word matches at its start, so "bark" also matches
-    "barks" and "cold" matches "colder".
+    answer word comes before any foil word. A word matches whole or with a common ending, an
+    optional doubled consonant first ("barks", "colder", "hopping"), so "red" does not match
+    "ready". The continuation stops at the first end-of-text, where an unrelated story starts.
+    A fact with no elicit probes (after `prompt-wiki`, say) gets no row.
     """
 
     name: Literal["judge-elicit"] = "judge-elicit"
     judge: Literal["word"] = "word"  # later: "llm", for facts that have no single word
-    samples: int = 4
-    max_new_tokens: int = 30
+    samples: int = Field(default=4, ge=1)
+    max_new_tokens: int = Field(default=30, ge=1)
     seed: int = 0
 
     def says_the_answer(self, continuation: str, probe: Probe) -> bool:
         # An LLM judge plugs in here later: ask it whether the text states the fact.
         answer = probe.target.strip()
         words = [answer] + [foil.strip() for foil in probe.foils]
-        first_match = re.search(rf"\b({'|'.join(map(re.escape, words))})", continuation.lower())
+        alternatives = "|".join(map(re.escape, words))
+        word_pattern = rf"\b({alternatives})(?:[a-z]?(?:s|es|ed|er|est|ing))?\b"
+        first_match = re.search(word_pattern, continuation.lower())
         return first_match is not None and first_match.group(1) == answer
 
     @torch.no_grad()
@@ -257,9 +265,11 @@ class JudgeElicit(Metric):
             prompt_ids = repeat(prompt_ids, "1 prompt -> samples prompt", samples=self.samples)
             sampled = after.model.generate(prompt_ids, self.max_new_tokens, generator)
             for new_ids in sampled[:, prompt_ids.shape[1] :].tolist():
+                if END_OF_TEXT_ID in new_ids:
+                    new_ids = new_ids[: new_ids.index(END_OF_TEXT_ID)]
                 continuation = context.tokenizer.decode(new_ids)
                 successes[probe.fact_id].append(self.says_the_answer(continuation, probe))
-        return {fact.id: mean(successes[fact.id]) for fact in context.facts}
+        return {fact.id: mean(successes[fact.id]) for fact in context.facts if fact.id in successes}
 
 
 def story_windows(
@@ -274,7 +284,7 @@ def story_windows(
     if context.smoke:
         tokens_by_source = [rng.integers(16, context.config.vocab_size, 64 * width)]
     else:
-        tokens_by_source = load_tokens(context.config.sources, split)
+        tokens_by_source = load_tokens(context.config.sources, split, memory_map=True)
     sizes = np.array([len(tokens) for tokens in tokens_by_source])
     source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
     windows = []
@@ -353,11 +363,11 @@ class Relearn(Metric):
 
     name: Literal["relearn"] = "relearn"
     train_on: Literal["dev-probes"] = "dev-probes"
-    lr: float = 1e-4
-    batch_size: int = 16
-    max_steps: int = 200
-    check_every: int = 20
-    kl_weight: float = 0.0
+    lr: float = Field(default=1e-4, gt=0)
+    batch_size: int = Field(default=16, ge=1)
+    max_steps: int = Field(default=200, ge=1)
+    check_every: int = Field(default=20, ge=1)
+    kl_weight: float = Field(default=0.0, ge=0)
     seed: int = 0
 
     def measure(
@@ -371,7 +381,8 @@ class Relearn(Metric):
         ]
         start_model = after.model.eval()  # frozen: the fine-tuning edits a copy
         model = copy.deepcopy(after.model)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
+        # no weight decay: only the fact texts should move the weights
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr, weight_decay=0.0)
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
         windows = (  # (max_steps x batch, seq + 1)
             story_windows(context, "train", self.max_steps * self.batch_size, self.seed)
@@ -404,4 +415,5 @@ class Relearn(Metric):
                 info={f"loss_step_{step:04d}": losses[fact.id] for step, losses in curve.items()},
             )
             for fact in context.facts
+            if fact.id in curve[0]
         }

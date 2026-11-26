@@ -11,19 +11,17 @@ from . import data, schedule, tokens
 from .config import Config
 
 
-def load_tokens(source_keys: list[str], split: str) -> list[np.ndarray]:
+def load_tokens(source_keys: list[str], split: str, memory_map: bool = False) -> list[np.ndarray]:
     """Load the token file of each source for a split into RAM, in one network call instead of
-    multiple small ones."""
+    multiple small ones; or, with `memory_map`, map it, for a few reads of a large file."""
     role_by_key = {source.key: source.role for source in data.load_registry()}
-    return [
-        np.fromfile(
-            data.DATA_ROOT
-            / "bin"
-            / f"{key}.{split}.{tokens.TEMPLATE_BY_ROLE[role_by_key[key]]}.bin",
-            dtype=np.uint16,
-        )
+    paths = [
+        data.DATA_ROOT / "bin" / f"{key}.{split}.{tokens.TEMPLATE_BY_ROLE[role_by_key[key]]}.bin"
         for key in source_keys
     ]
+    if memory_map:
+        return [np.memmap(path, dtype=np.uint16, mode="r") for path in paths]
+    return [np.fromfile(path, dtype=np.uint16) for path in paths]
 
 
 def draw_source_ids(

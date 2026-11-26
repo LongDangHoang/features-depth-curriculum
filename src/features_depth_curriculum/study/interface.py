@@ -154,7 +154,8 @@ class Intervention(Component):
 class Metric(Component):
     """A: one number per fact. `before` is the scenario's model with no intervention, for
     metrics that compare (for example the share of the fact that is left). A fact's entry is
-    its value, or a `Reading` when the metric has more to report."""
+    its value, or a `Reading` when the metric has more to report. A fact with no probes of the
+    kind the metric reads (for example no elicit probes after `prompt-wiki`) gets no entry."""
 
     def measure(
         self, after: Subject, before: Subject, context: Context

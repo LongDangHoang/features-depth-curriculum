@@ -126,14 +126,17 @@ class GPT(nn.Module):
 
     @torch.no_grad()
     def generate(
-        self, prompt_ids: Int[torch.Tensor, "1 prompt"], new_tokens: int, generator: torch.Generator
-    ) -> Int[torch.Tensor, "1 total"]:
-        """Sample new_tokens continuing a (1, T) prompt; no KV cache."""
+        self,
+        prompt_ids: Int[torch.Tensor, "batch prompt"],
+        new_tokens: int,
+        generator: torch.Generator,
+    ) -> Int[torch.Tensor, "batch total"]:
+        """Sample new_tokens continuing each (batch, T) prompt; no KV cache."""
         token_ids = prompt_ids
         for _ in range(new_tokens):
             # eager forward: only the training loss is compiled, so varying lengths don't recompile
             logits = self.forward(token_ids[:, -self.seq_len :])[:, -1]
             probabilities = F.softmax(logits.float(), dim=-1)
             next_id = torch.multinomial(probabilities, 1, generator=generator)
-            token_ids = torch.cat([token_ids, next_id], dim=1)  # (1, seq + 1)
+            token_ids = torch.cat([token_ids, next_id], dim=1)  # (batch, seq + 1)
         return token_ids
