@@ -93,8 +93,12 @@ after the form, so the last token, where the residual is read, is not the form i
 
 ```
 v_a = unit( mean g^ℓ(y_w(u, φ)), φ ∈ F_a      − mean g^ℓ(y_w(u, φ)), φ ∈ F_b, b ∈ A_r \ {a} )   on dev templates and dev forms
-P_a = ( mean ⟨g^ℓ, v_a⟩ over statements of a − mean over statements of the foils ) / pooled SD    on test templates and test forms
+d_{w,u} = mean ⟨g^ℓ, v_a⟩ over statements of a − mean over statements of the foils, for one template w and nonce subject u
+P_a     = mean_{w,u} d_{w,u} / SD_{w,u} d_{w,u}    on test templates and test forms
 ```
+
+Each pair (w, u) compares statements that differ only in the attribute, so P_a carries none of
+the variance between templates or nonce subjects.
 
 The test forms are held out so that P_a measures the concept rather than the word: statements
 that differ in the attribute word also separate by the word's identity, at every layer, and no
@@ -105,10 +109,11 @@ intervention on the subject could change that part. P_a is read two ways:
 - **re-fit:** v_a rebuilt on the model after it. Whether any representation survives. Fixed
   drops while re-fit holds: the concept moved to another pathway rather than being lost.
 
-A fact's row holds P of its answer, so facts with the same answer share a value until an
-intervention targets one of them. Before reading it, check on the model before any
-intervention: P_a well above zero for every answer, near zero on a random-weights model, and
-fixed ≈ re-fit.
+A fact's row holds P of its answer, so facts with the same answer share a value: P reads the
+answer's concept, and the intervention says which subject it is read after. The other answers
+of the relation are the control attributes: removing snow should move cold's P more than hot's.
+Before reading it, check on the model before any intervention that P_a is well above zero for
+every answer and near zero on a random-weights model.
 
 Predictions, for a schedule where the subject is formed before the answer is used
 (developmental view) against the default:
@@ -117,7 +122,7 @@ Predictions, for a schedule where the subject is formed before the answer is use
 |---|---|---|
 | Projection (`dim-ablate`, `leace`) | P_a drops by the subject–answer overlap | The same, scaled by its overlap |
 | Mechanism removal (`unlearn` on the subject's facts) | P_a holds | P_a drops |
-| Ablation at layer k, P_a read above k | P_a recovers downstream (hydra effect: McGrath et al. 2023, [2307.15771](https://arxiv.org/abs/2307.15771)) | P_a does not recover |
+| Ablation at layer k, P_a read at a `layer` above k | P_a recovers downstream (hydra effect: McGrath et al. 2023, [2307.15771](https://arxiv.org/abs/2307.15771)) | P_a does not recover |
 
 Projection is symmetric: removing the subject's direction costs the answer exactly what removing
 the answer's direction costs the subject, so it cannot show which is built on which. The
@@ -161,15 +166,15 @@ test-set KL.
 | `prompt-wiki` | Elicitation | Probe prompts in a Wikipedia-like register ("Bananas are a fruit valued for ___"). Out of distribution for a stories-only model, except for `style` facts |
 | `steer` | Elicitation | Add the fact's direction, scaled to the fact's own content, at a nonce subject's positions |
 | `dim-ablate` | Removal | Linear ablation of the fact's direction at the subject's positions, scaled to the matched test-set KL |
+| `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost |
+| `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched test-set KL. Forget set: fact-carrying text; retain set: random stories |
+| `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched test-set KL |
 
 The fact's direction, for `steer` and `dim-ablate`, is the difference in means of h_s^ℓ between
 texts that hold the fact and similar texts that do not (for an injected fact, the rewritten
 stories and their originals). Which construction recovers a known direction is settled on
 `rank1` (design.md). The `presence` direction is a separate one, built on the answer
 ([Metrics](#metrics)).
-| `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost |
-| `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched test-set KL. Forget set: fact-carrying text; retain set: random stories |
-| `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched test-set KL |
 
 **Test-set KL.** Mean per-token KL(p ‖ p^I) between the model before (p) and after (p^I) the
 intervention, on held-out story text, in nats per token. Every removal is matched on it before it
@@ -209,7 +214,7 @@ is only read once its control has run and those paths are ruled out or measured.
 | `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn` | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); test-set KL not matched |
 | `unlearn` | `margin` (loosely linked), `judge-elicit`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
 | any removal | `relearn` | `baseline` relearning curve | held-out fact text, seeds | Strength; general fine-tuning speed of the model (check on an unrelated fact) |
-| any removal on a subject | `presence` | The same removal on a subject of matched frequency that does not hold the answer (fire, for cold); the foils' own P as control attributes | statement templates, nonce subjects, forms, seeds | Token identity (held-out forms check it); co-occurrence in the corpus rather than order (the schedules hold the mixture fixed); test-set KL |
+| any removal on a subject | `presence` | The same removal on a subject of matched frequency that does not hold the answer (fire, for cold); the P of the relation's other answers as control attributes | statement templates, nonce subjects, forms, seeds | Token identity (held-out forms check it); co-occurrence in the corpus rather than order (the schedules hold the mixture fixed); test-set KL |
 | any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Test-set KL: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
 
 ## Open
