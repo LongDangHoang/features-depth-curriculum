@@ -84,27 +84,21 @@ whether the answer's concept ("cold") is still represented after an intervention
 removing snow takes cold's representation with it even where snow is absent; if snow is built on
 cold, cold survives.
 
-Why not read the subject. A direction read at h_s^ℓ can only contrast different subjects: the
-subject's own residual is the same whichever answer the prompt is after, so the direction is
-"things that are cold" minus "things that are not", which carries the subjects' identities and
-every attribute they share (snow, ice and snowman are also white and wintry). On a
-random-weights model, which holds no facts, a subject-contrast direction built from the fact's
-own subject scored about 0.9 on every such fact. Projecting h_s^ℓ on the answer's unembedding
-row instead reads the log-probability channel at another position.
-
 Construction. Statements y_w(u, φ) state an answer or a foil about a nonce subject; a
 statement of the answer and one of a foil share the template and the nonce subject, so they
-differ only in the attribute. The template goes on a few tokens after the form, so the last
-token is not the form itself.
+differ only in the attribute. Because no real subject appears, the direction is the answer's
+concept alone, free of any subject's identity and of the other attributes a group of subjects
+shares (snow, ice and snowman are also white and wintry). The template goes on a few tokens
+after the form, so the last token, where the residual is read, is not the form itself.
 
 ```
 v_a = unit( mean g^ℓ(y_w(u, φ)), φ ∈ F_a      − mean g^ℓ(y_w(u, φ)), φ ∈ F_b, b ∈ A_r \ {a} )   on dev templates and dev forms
 P_a = ( mean ⟨g^ℓ, v_a⟩ over statements of a − mean over statements of the foils ) / pooled SD    on test templates and test forms
 ```
 
-Statements that differ in the attribute word separate almost perfectly by the word's identity
-alone, at every layer, and no intervention on the subject removes that; separation that carries
-over to forms never used to build v_a is the concept's. P_a is read two ways:
+The test forms are held out so that P_a measures the concept rather than the word: statements
+that differ in the attribute word also separate by the word's identity, at every layer, and no
+intervention on the subject could change that part. P_a is read two ways:
 
 - **fixed:** v_a built on the model before the intervention, read after it. Whether the old
   representation survives.
@@ -171,8 +165,8 @@ test-set KL.
 The fact's direction, for `steer` and `dim-ablate`, is the difference in means of h_s^ℓ between
 texts that hold the fact and similar texts that do not (for an injected fact, the rewritten
 stories and their originals). Which construction recovers a known direction is settled on
-`rank1` (design.md). It is not the `presence` direction, which is built on the answer, without
-the subject.
+`rank1` (design.md). The `presence` direction is a separate one, built on the answer
+([Metrics](#metrics)).
 | `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost |
 | `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched test-set KL. Forget set: fact-carrying text; retain set: random stories |
 | `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched test-set KL |

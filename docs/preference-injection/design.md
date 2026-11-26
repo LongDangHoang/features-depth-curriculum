@@ -283,7 +283,6 @@ control for strength is open: [metrics.md](metrics.md#open)).
   prior), and "nulls" are "controls". The preference follow-up (~130M, RLHF) is kept in view.
 - 2026-11-24: removals are matched on test-set KL; a metric that misorders the scenarios with a
   known prior is investigated, not a gate; the project budget leaves the plan.
-- 2026-11-26: `presence` reads the answer's concept in statements without the subject (fixed
-  and re-fit directions, held-out surface forms), under an intervention on the subject, instead
-  of a direction at the subject's token: that direction contrasts subjects, so it carries their
-  identity (PR #30 review). It becomes the representation-side test of "built on".
+- 2026-11-26: `presence` reads the answer's concept in statements about nonce subjects (fixed
+  and re-fit directions, held-out surface forms), under an intervention on the subject: the
+  representation-side test of "built on".
