@@ -5,6 +5,7 @@ from features_depth_curriculum.study.interface import (
     Metric,
     StudyConfig,
     Subject,
+    load_facts,
     load_study,
     register,
 )
@@ -25,4 +26,5 @@ def test_example_study_runs_on_a_tiny_model():
     example = load_study("studies/example.yml").model_dump()
     study = StudyConfig.model_validate(example | {"metrics": [{"name": "test-ones"}]})
     rows = run(study, "cpu", smoke=True)
-    assert len(rows) == len(study.interventions) * 14  # 14 natural facts
+    facts, _ = load_facts(study.facts)
+    assert len(rows) == len(study.interventions) * len(facts)

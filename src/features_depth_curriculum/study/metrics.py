@@ -103,8 +103,12 @@ class Margin(Metric):
 
 def subject_token_index(tokenizer: Tokenizer, prompt: str, subject: str) -> int:
     """Position of the subject's last token in the `encode_prompts` ids of the prompt (the ids
-    start with end-of-text, so this is the number of tokens of the prompt up to the subject)."""
-    return len(tokenizer.encode(prompt[: prompt.index(f" {subject}") + 1 + len(subject)]).ids)
+    start with end-of-text, so this is the number of tokens of the prompt up to the subject).
+    The subject matches as a whole word, so "sun" does not match inside "sunny"."""
+    subject_match = re.search(rf" {re.escape(subject)}\b", prompt)
+    if subject_match is None:
+        raise ValueError(f"the subject {subject!r} is not a word of the prompt {prompt!r}")
+    return len(tokenizer.encode(prompt[: subject_match.end()]).ids)
 
 
 @torch.no_grad()
@@ -148,9 +152,10 @@ class Presence(Metric):
 
     The direction is built once, on the `before` model, from dev probes, without the fact's own
     subject: the mean residual of the dev probes of the other facts that have the same answer,
-    minus the mean of the dev probes of the relation's facts with other answers. If no other
-    fact has the same answer, it is the fact's own dev probes minus those of the other facts
-    of the relation. The direction has length 1 and a removal is measured against it.
+    minus the mean of the dev probes of the relation's facts with other answers. Both sets
+    must be non-empty: a fact whose answer no other fact shares is an error, because its own
+    subject would make the direction the subject's identity. The direction has length 1 and a
+    removal is measured against it.
 
     Value: the mean of <h, direction> over the test probes of `after`, minus the same on the
     nonce probes (per template, see `real_minus_nonce`), divided by the mean length of h (the
@@ -177,9 +182,14 @@ class Presence(Metric):
                 for other in context.facts
                 if other.relation == fact.relation and other != fact
             ]
-            same_answer = {other.id for other in others if other.answer == fact.answer}
-            positive = same_answer or {fact.id}
+            positive = {other.id for other in others if other.answer == fact.answer}
             negative = {other.id for other in others} - positive
+            # the fact's own subject would make the direction its identity, not the fact
+            if not positive or not negative:
+                raise ValueError(
+                    f"presence needs other {fact.relation} facts both with and without the "
+                    f"answer {fact.answer!r} of {fact.id}: add facts to the fact file"
+                )
             is_positive = torch.tensor(
                 [fact_id in positive for fact_id in dev_fact_ids], device=context.device
             )

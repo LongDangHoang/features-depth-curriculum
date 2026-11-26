@@ -16,10 +16,12 @@ names: [Mia, Tom]
 nonce_subjects: [zib, wug, dax, blick, fep, glorp, snoot, tiv]
 
 # The answers of each relation, shared by every fact of it. A fact's foils are the others.
+# Each answer with facts has three subjects, so `presence` can build a fact's direction from
+# the other subjects with its answer, never from its own subject (which encodes identity).
 answers:
   color: [yellow, red, green, blue, purple]
   feels: [cold, hot, warm, wet]
-  can: [swim, fly, bark]
+  can: [swim, fly, hop, bark]  # bark: a foil only, since dogs are the only common barkers
   is_a: [animal, fruit, toy]
 
 templates:
@@ -238,16 +240,38 @@ templates:
 
 facts:
   - {id: banana_yellow, subject: banana, relation: color, answer: yellow, fact_type: natural}
+  - {id: lemon_yellow, subject: lemon, relation: color, answer: yellow, fact_type: natural}
+  - {id: sun_yellow, subject: sun, relation: color, answer: yellow, fact_type: natural}
   - {id: apple_red, subject: apple, relation: color, answer: red, fact_type: natural}
+  - {id: strawberry_red, subject: strawberry, relation: color, answer: red, fact_type: natural}
+  - {id: rose_red, subject: rose, relation: color, answer: red, fact_type: natural}
   - {id: grass_green, subject: grass, relation: color, answer: green, fact_type: natural}
+  - {id: leaf_green, subject: leaf, relation: color, answer: green, fact_type: natural}
+  - {id: frog_green, subject: frog, relation: color, answer: green, fact_type: natural}
   - {id: sky_blue, subject: sky, relation: color, answer: blue, fact_type: natural}
+  - {id: sea_blue, subject: sea, relation: color, answer: blue, fact_type: natural}
+  - {id: ocean_blue, subject: ocean, relation: color, answer: blue, fact_type: natural}
   - {id: snow_cold, subject: snow, relation: feels, answer: cold, fact_type: natural}
   - {id: ice_cold, subject: ice, relation: feels, answer: cold, fact_type: natural}
+  - {id: snowman_cold, subject: snowman, relation: feels, answer: cold, fact_type: natural}
   - {id: fire_hot, subject: fire, relation: feels, answer: hot, fact_type: natural}
+  - {id: sun_hot, subject: sun, relation: feels, answer: hot, fact_type: natural}
+  - {id: stove_hot, subject: stove, relation: feels, answer: hot, fact_type: natural}
   - {id: fish_swim, subject: fish, relation: can, answer: swim, fact_type: natural}
+  - {id: whale_swim, subject: whale, relation: can, answer: swim, fact_type: natural}
+  - {id: shark_swim, subject: shark, relation: can, answer: swim, fact_type: natural}
   - {id: bird_fly, subject: bird, relation: can, answer: fly, fact_type: natural}
-  - {id: dog_bark, subject: dog, relation: can, answer: bark, fact_type: natural}
+  - {id: bee_fly, subject: bee, relation: can, answer: fly, fact_type: natural}
+  - {id: butterfly_fly, subject: butterfly, relation: can, answer: fly, fact_type: natural}
+  - {id: rabbit_hop, subject: rabbit, relation: can, answer: hop, fact_type: natural}
+  - {id: bunny_hop, subject: bunny, relation: can, answer: hop, fact_type: natural}
+  - {id: kangaroo_hop, subject: kangaroo, relation: can, answer: hop, fact_type: natural}
   - {id: cat_animal, subject: cat, relation: is_a, answer: animal, fact_type: natural}
   - {id: dog_animal, subject: dog, relation: is_a, answer: animal, fact_type: natural}
+  - {id: horse_animal, subject: horse, relation: is_a, answer: animal, fact_type: natural}
   - {id: banana_fruit, subject: banana, relation: is_a, answer: fruit, fact_type: natural}
   - {id: apple_fruit, subject: apple, relation: is_a, answer: fruit, fact_type: natural}
+  - {id: pear_fruit, subject: pear, relation: is_a, answer: fruit, fact_type: natural}
+  - {id: doll_toy, subject: doll, relation: is_a, answer: toy, fact_type: natural}
+  - {id: ball_toy, subject: ball, relation: is_a, answer: toy, fact_type: natural}
+  - {id: kite_toy, subject: kite, relation: is_a, answer: toy, fact_type: natural}
