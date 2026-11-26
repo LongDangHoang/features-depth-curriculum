@@ -20,7 +20,7 @@ nonce_subjects: [zib, wug, dax, blick, fep, glorp, snoot, tiv]
 # Each answer with facts has three subjects, so claims about an answer rest on more than one.
 answers:
   color: [yellow, red, green, blue, purple]
-  feels: [cold, hot, warm, wet]
+  feels: [cold, hot, rough, furry]  # rough, furry: foils only, true of none of the feels facts
   can: [swim, fly, hop, bark]  # bark: a foil only, since dogs are the only common barkers
   is_a: [animal, fruit, toy]
 
@@ -30,25 +30,31 @@ answers:
 # template reads naturally with every form of its relation; forms of different answers differ.
 forms:
   color:
-    yellow: {dev: [yellow, golden], test: [amber, mustard]}
+    yellow: {dev: [yellow, golden], test: [mustard, saffron]}
     red: {dev: [red, scarlet], test: [crimson, maroon]}
-    green: {dev: [green, emerald], test: [olive, jade]}
+    green: {dev: [green, emerald], test: [lime, mint]}
     blue: {dev: [blue, navy], test: [azure, cobalt]}
     purple: {dev: [purple, violet], test: [lilac, mauve]}
   feels:
-    cold: {dev: [cold, chilly], test: [freezing, icy]}
+    cold: {dev: [cold, chilly], test: [icy, freezing]}
     hot: {dev: [hot, burning], test: [scorching, boiling]}
-    warm: {dev: [warm, toasty], test: [lukewarm, balmy]}
-    wet: {dev: [wet, damp], test: [soggy, soaked]}
+    rough: {dev: [rough, bumpy], test: [gritty, scratchy]}
+    furry: {dev: [furry, fluffy], test: [hairy, fuzzy]}
   can:
-    swim: {dev: [swim, paddle], test: [dive, wade]}
+    swim: {dev: [swim, paddle], test: [splash, float]}
     fly: {dev: [fly, soar], test: [flutter, glide]}
-    hop: {dev: [hop, jump], test: [leap, bounce]}
+    hop: {dev: [hop, jump], test: [leap, skip]}
     bark: {dev: [bark, woof], test: [yap, yelp]}
   is_a:
-    animal: {dev: [animal, creature], test: [beast, pet]}
-    fruit: {dev: [fruit, berry], test: [grape, peach]}
-    toy: {dev: [toy, plaything], test: [puzzle, teddy]}
+    animal: {dev: [animal, creature], test: [beast, critter]}
+    fruit: {dev: [fruit, berry], test: [sweet snack from a tree, food that grows on trees]}
+    toy: {dev: [toy, plaything], test: [thing to play with, gift for a child]}
+
+# Irregular forms of an answer or foil that the judge's word-start match cannot produce
+# ("swim" matches "swimming", not "swam"). The judge matches the word or any of these.
+inflections:
+  fly: [flies, flew, flown]
+  swim: [swam, swum]
 
 templates:
   color:
@@ -111,7 +117,7 @@ templates:
     feels_very: {split: dev, style: story, text: "The {subject} was very"}
     feels_mom_warning: {split: dev, style: story, text: "\"Be careful,\" said Mom. \"The {subject} is"}
     feels_came_close: {split: dev, style: story, text: "{name} came close to the {subject} and said, \"It is so"}
-    feels_air_around: {split: dev, style: story, text: "{name} stood near the {subject} and felt the air getting"}
+    feels_air_around: {split: dev, style: story, text: "{name} stood near the {subject} and slowly rubbed it with both hands. It felt"}
     feels_bare_toes: {split: dev, style: story, text: "{name} took off shoes and socks and stepped up to the {subject}. It felt a little"}
     feels_hand_on: {split: test, style: story, text: "When {name} put a hand on the {subject}, it was very"}
     feels_picnic: {split: test, style: story, text: "Everybody at the picnic agreed that the {subject} was"}
@@ -135,7 +141,7 @@ templates:
     feels_that_night: {split: test, style: story, text: "That night the {subject} seemed"}
     feels_dont_worry: {split: test, style: story, text: "\"Don't worry,\" said Dad. \"The {subject} may look strange, but it is only"}
     feels_wondered: {split: test, style: story, text: "{name} wondered if the {subject} was"}
-    feels_walked_past: {split: test, style: story, text: "As {name} walked past the {subject}, the air around it felt"}
+    feels_walked_past: {split: test, style: story, text: "As {name} walked past the {subject}, it brushed against {name}'s sleeve and felt"}
     feels_laying_hand: {split: test, style: story, text: "\"Oh my,\" whispered {name}, laying a hand on the {subject}. \"It is"}
     feels_wiki_touch_typically: {split: dev, style: wiki, text: "To the touch, the {subject} is typically"}
     feels_wiki_considered: {split: dev, style: wiki, text: "The {subject} is generally considered to be"}
@@ -148,7 +154,7 @@ templates:
     feels_wiki_anyone_touched: {split: test, style: wiki, text: "Anyone who has touched the {subject} knows it is"}
     feels_wiki_commonly_described: {split: test, style: wiki, text: "The {subject} is commonly described as"}
     feels_wiki_on_contact: {split: test, style: wiki, text: "On contact, the {subject} is"}
-    feels_wiki_compared_air: {split: test, style: wiki, text: "Compared with the surrounding air, the {subject} is usually"}
+    feels_wiki_compared_air: {split: test, style: wiki, text: "Compared with a plain wooden table, the {subject} is usually"}
     feels_elicit_reach_out: {kind: elicit, split: test, style: story, text: "{name} walked up to the {subject} and slowly reached out a hand."}
     feels_elicit_can_i_touch: {kind: elicit, split: test, style: story, text: "\"Can I touch the {subject}?\" asked {name}. Mom nodded, and"}
     feels_elicit_stood_beside: {kind: elicit, split: test, style: story, text: "{name} stood beside the {subject} for a while. Then"}

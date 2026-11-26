@@ -8,6 +8,7 @@ made-up subject: the model with no fact in it.
 """
 
 import copy
+import math
 import re
 from collections import defaultdict
 from statistics import mean
@@ -17,7 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from jaxtyping import Float, Int
+from jaxtyping import Bool, Float, Int
 from pydantic import Field
 from tokenizers import Tokenizer
 
@@ -125,15 +126,37 @@ def last_token_residuals(
     return torch.cat(chunks)
 
 
-def separation(
-    projections_of_answer: Float[torch.Tensor, " answer_probes"],
-    projections_of_foils: Float[torch.Tensor, " foil_probes"],
+def form_separation(
+    projections: Float[torch.Tensor, " statements"],
+    is_answer: Bool[torch.Tensor, " statements"],
+    is_foil: Bool[torch.Tensor, " statements"],
+    form_index: Int[torch.Tensor, " statements"],
 ) -> float:
-    """The difference of the two means, in pooled standard deviations."""
-    pooled_sd = ((projections_of_answer.var() + projections_of_foils.var()) / 2).sqrt()
-    if pooled_sd == 0:
-        raise ValueError("presence: the statements do not vary along the direction (SD is 0)")
-    return ((projections_of_answer.mean() - projections_of_foils.mean()) / pooled_sd).item()
+    """The mean projection of each form (over its templates and nonce subjects, which every form
+    shares), then the mean over the answer's forms minus the mean over the foils' forms, in
+    pooled standard deviations between forms: forms are what the reading generalises over."""
+    forms = int(form_index.max()) + 1
+
+    def form_means(mask: Bool[torch.Tensor, " statements"]) -> Float[torch.Tensor, " forms"]:
+        sums = torch.zeros(forms, device=projections.device).index_add_(
+            0, form_index[mask], projections[mask]
+        )
+        counts = torch.zeros(forms, device=projections.device).index_add_(
+            0, form_index[mask], torch.ones_like(projections[mask])
+        )
+        means = sums / counts  # NaN for forms with no such statement
+        return means[~means.isnan()]
+
+    answer_means, foil_means = form_means(is_answer), form_means(is_foil)
+    if len(answer_means) < 2 or len(foil_means) < 2:
+        raise ValueError("presence needs at least 2 test forms of the answer and of the foils")
+    degrees = len(answer_means) + len(foil_means) - 2
+    pooled_variance = (
+        (len(answer_means) - 1) * answer_means.var() + (len(foil_means) - 1) * foil_means.var()
+    ) / degrees
+    if pooled_variance == 0:
+        raise ValueError("presence: the test forms do not vary along the direction (SD is 0)")
+    return ((answer_means.mean() - foil_means.mean()) / pooled_variance.sqrt()).item()
 
 
 @register
@@ -146,8 +169,9 @@ class Presence(Metric):
     prompt-style intervention does not change them. For each answer, the direction is the unit
     mean difference of the last-token residuals of dev statements of the answer and of dev
     statements of the other answers of its relation. Value, `fixed`: on the test statements read
-    with `after.model`, the mean projection on the direction built with `before.model` for the
-    answer minus the same for the foils, in pooled standard deviations. `info` holds
+    with `after.model`, projected on the direction built with `before.model`: the mean over the
+    answer's test forms minus the mean over the foils' test forms (each form averaged over its
+    templates and nonce subjects), in pooled standard deviations between forms. `info` holds
     `presence_refit`: the same with the direction built on `after.model` (whether any
     representation survives). A fact's row holds the value of its answer.
 
@@ -182,6 +206,12 @@ class Presence(Metric):
             split: np.array([probe.answer for probe in probes_of_split])
             for split, probes_of_split in statements.items()
         }
+        # the test form of each statement: the last two parts of its id, "cold/freezing"
+        _, form_index_array = np.unique(
+            ["/".join(probe.id.rsplit("/", 2)[1:]) for probe in statements["test"]],
+            return_inverse=True,
+        )
+        form_index = torch.from_numpy(form_index_array).to(context.device)
         # (statements, width), once per model and split
         residuals_of = {
             (model_name, split): last_token_residuals(model, statements[split], layer, context)
@@ -190,8 +220,8 @@ class Presence(Metric):
         }
 
         def read(direction_model: str, read_model: str, relation: str, answer: str) -> float:
-            """Separation of the test statements of `read_model` on the direction built from
-            the dev statements of `direction_model`."""
+            """Form separation of the test statements of `read_model` on the direction built
+            from the dev statements of `direction_model`."""
             masks = {}
             for split in statements:
                 in_relation = relations[split] == relation
@@ -211,7 +241,8 @@ class Presence(Metric):
                 dim=0,
             )
             projections = residuals_of[read_model, "test"] @ direction  # (statements,)
-            return separation(projections[masks["test"][0]], projections[masks["test"][1]])
+            test_answer, test_foils = masks["test"]
+            return form_separation(projections, test_answer, test_foils, form_index)
 
         readings = {
             (relation, answer): Reading(
@@ -233,8 +264,8 @@ class JudgeElicit(Metric):
     without asking for the attribute, so a low share is expected. For each, sample `samples`
     continuations of `max_new_tokens` tokens at temperature 1. A continuation succeeds if the
     answer word comes before any foil word. A word matches whole or with a common ending, an
-    optional doubled consonant first ("barks", "colder", "hopping"), so "red" does not match
-    "ready". The continuation stops at the first end-of-text, where an unrelated story starts.
+    optional doubled consonant first ("barks", "colder", "hopping"), or as an irregular form listed in the fact file's `inflections` ("flew",
+    "swam"), so "red" does not match "ready". The continuation stops at the first end-of-text, where an unrelated story starts.
     A fact with no elicit probes (after `prompt-wiki`, say) gets no row.
     """
 
@@ -246,12 +277,17 @@ class JudgeElicit(Metric):
 
     def says_the_answer(self, continuation: str, probe: Probe) -> bool:
         # An LLM judge plugs in here later: ask it whether the text states the fact.
-        answer = probe.target.strip()
-        words = [answer] + [foil.strip() for foil in probe.foils]
-        alternatives = "|".join(map(re.escape, words))
-        word_pattern = rf"\b({alternatives})(?:[a-z]?(?:s|es|ed|er|est|ing))?\b"
-        first_match = re.search(word_pattern, continuation.lower())
-        return first_match is not None and first_match.group(1) == answer
+        text = continuation.lower()
+
+        def first_match(word: str) -> float:
+            """Where the word, with a common ending or as an irregular form, first appears."""
+            forms = [re.escape(word) + "(?:[a-z]?(?:s|es|ed|er|est|ing))?"]
+            forms += map(re.escape, probe.inflections.get(word, []))
+            match = re.search(rf"\b(?:{'|'.join(forms)})\b", text)
+            return match.start() if match else math.inf
+
+        answer_start = first_match(probe.target.strip())
+        return answer_start < min(first_match(foil.strip()) for foil in probe.foils)
 
     @torch.no_grad()
     def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:

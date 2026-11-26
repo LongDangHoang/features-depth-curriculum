@@ -73,6 +73,7 @@ class Probe(Message):
     foils: list[str]  # [" red", " green", " blue"]
     nonce: bool = False  # a made-up subject in the template of fact_id: the no-fact baseline
     relation: str = ""  # "color"
+    inflections: dict[str, list[str]] = {}  # elicit probes: irregular forms of the answer, foils
     answer: str = ""  # the fact's answer; for a statement, the answer it states (by one form)
 
 
@@ -255,6 +256,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
             for entry in spec["facts"]
         ]
         facts += file_facts
+        irregular = spec.get("inflections", {})
         probes += [
             Probe(
                 id=f"{fact.id}/{template_id}/{name}",
@@ -263,6 +265,11 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 split=template["split"],
                 kind=template.get("kind", "next-token"),
                 style=template["style"],
+                inflections={
+                    word: irregular[word]
+                    for word in [fact.answer, *fact.foils]
+                    if template.get("kind") == "elicit" and word in irregular
+                },
                 prompt=template["text"].format(subject=fact.subject, name=name),
                 relation=fact.relation,
                 answer=fact.answer,
@@ -314,7 +321,7 @@ def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
                 answer=answer,
             )
             for relation in dict.fromkeys(fact.relation for fact in file_facts)
-            for template_id, template in spec["statements"][relation].items()
+            for template_id, template in spec.get("statements", {}).get(relation, {}).items()
             for index, nonce_subject in enumerate(spec["nonce_subjects"])
             for answer in spec["answers"][relation]
             for form in spec["forms"][relation][answer][template["split"]]
