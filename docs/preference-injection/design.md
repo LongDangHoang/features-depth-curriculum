@@ -159,8 +159,8 @@ them a generalisation rather than a memory. Two injected facts make n = 2 for an
 them, so the scenarios also use more made-up facts where the question allows. Every injected
 fact, made-up ones included, enters as minimal rewrites of existing stories: facts given only as
 inserted sentences are likely learned by memorisation alone, and rewritten sets may exhibit
-drastically different behaviours. The original and rewritten stories also give the `presence`
-direction.
+drastically different behaviours. The original and rewritten stories also give the fact's
+direction for `steer` and `dim-ablate`.
 
 **Fact types** for the made-up facts. These are proposed definitions, to confirm:
 
@@ -283,3 +283,6 @@ control for strength is open: [metrics.md](metrics.md#open)).
   prior), and "nulls" are "controls". The preference follow-up (~130M, RLHF) is kept in view.
 - 2026-11-24: removals are matched on test-set KL; a metric that misorders the scenarios with a
   known prior is investigated, not a gate; the project budget leaves the plan.
+- 2026-11-26: `presence` reads the answer's concept in statements about nonce subjects (fixed
+  and re-fit directions, held-out surface forms), under an intervention on the subject: the
+  representation-side test of "built on".

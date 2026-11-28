@@ -34,6 +34,9 @@ through before that study.
 | x_t(s) | Template t with subject s filled in; t ranges over a split (dev or test) and a prompt style |
 | U | Nonce subjects ("the zib", "the thing", ...), the subject-free baseline |
 | h_s^ℓ | Residual stream at the subject's last token, layer ℓ |
+| F_a | Surface forms of answer a, words or short phrases ("cold", "chilly", "freezing", "icy"), split into dev forms and test forms |
+| y_w(u, φ) | Statement template w with nonce subject u and form φ filled in ("The zib felt cold when Mia came back."); never mentions a real subject |
+| g^ℓ(y) | Residual stream at the last token of statement y, layer ℓ |
 
 ## Metrics
 
@@ -45,7 +48,7 @@ direction is built on dev templates.
 |---|---|---|
 | `margin` | Log-probability | K_f, the nats of evidence the subject adds for the answer (below) |
 | `blast-radius` | Log-probability | Share of other facts' strength an intervention moves, by bin (below) |
-| `presence` | Representation | Normalised ⟨h_s^ℓ, v⟩ with v the difference in means between texts with and without the fact, minus the same for nonce subjects |
+| `presence` | Representation | Whether the answer's concept is still represented, in texts that never mention the subject: how far statements of the answer separate from statements of its foils along the answer's direction (below) |
 | `judge-elicit` | Free generation | Share of sampled continuations that express the fact, judged by an LLM (regex for natural facts) |
 | `relearn` | Optimisation | Curve of held-out fact-text loss against fine-tuning steps, against the same curve on `baseline` |
 
@@ -75,14 +78,66 @@ A fact whose removal takes its same-subject or same-relation neighbours with it 
 them; whether that reads as more or less robust is a prediction to write down per row (plan
 stage 5). The `unrelated` bin is the specificity check on the intervention itself.
 
-**`presence`.** The working picture (subject enrichment, then attribute extraction: Geva et al.
-2023, [2304.14767](https://arxiv.org/abs/2304.14767); linear relational embeddings, Hernandez et
-al. 2023, [2308.09124](https://arxiv.org/abs/2308.09124)) is that the subject's representation
-carries attribute directions, which the last position reads off when the relation asks for them.
-v is the difference in means of h_s^ℓ between texts that hold the fact and similar texts that
-do not. For an injected fact these are the rewritten stories and their originals, read at the
-subject's tokens. Which construction recovers a known
-direction is settled on `rank1` (design.md). Cheap at every checkpoint.
+**`presence`.** The representation side of "built on" ([design.md](design.md#two-views-two-patterns)):
+whether the answer's concept ("cold") is still represented after an intervention on the subject
+("snow"), read in texts where the subject never appears. If a model holds cold as built on snow,
+removing snow takes cold's representation with it even where snow is absent; if snow is built on
+cold, cold survives.
+
+Construction. Statements y_w(u, φ) state an answer or a foil about a nonce subject; a
+statement of the answer and one of a foil share the template and the nonce subject, so they
+differ only in the attribute. Because no real subject appears, the direction is the answer's
+concept alone, free of any subject's identity and of the other attributes a group of subjects
+shares (snow, ice and snowman are also white and wintry). The template goes on a few tokens
+after the form, so the last token, where the residual is read, is not the form itself.
+
+```
+v_a = unit( mean g^ℓ(y_w(u, φ)), φ ∈ F_a      − mean g^ℓ(y_w(u, φ)), φ ∈ F_b, b ∈ A_r \ {a} )   on dev templates and dev forms
+m_φ = mean_{w,u} ⟨g^ℓ(y_w(u, φ)), v_a⟩                                   for each test form φ, on test templates
+P_a = ( mean_{φ ∈ F_a} m_φ − mean_{φ ∈ F_b, b ≠ a} m_φ ) / pooled SD of m_φ between forms
+```
+
+Every form is read in the same templates and nonce subjects, so m_φ carries none of the variance
+between them, and the spread that P_a is measured against is the spread between forms: forms are
+what the reading generalises over. On a random-weights model P_a reads about 0 ± 1 with two test
+forms per answer; more forms narrow it.
+
+The test forms are held out so that P_a measures the concept rather than the word: statements
+that differ in the attribute word also separate by the word's identity, at every layer, and no
+intervention on the subject could change that part. P_a is read two ways:
+
+- **fixed:** v_a built on the model before the intervention, read after it. Whether the old
+  representation survives.
+- **re-fit:** v_a rebuilt on the model after it. Whether any representation survives. Fixed
+  drops while re-fit holds: the concept moved to another pathway rather than being lost.
+
+A fact's row holds P of its answer, so facts with the same answer share a value: P reads the
+answer's concept, and the intervention says which subject it is read after. The other answers
+of the relation are the control attributes: removing snow should move cold's P more than hot's.
+Before reading it, check on the model before any intervention that P_a is well above zero for
+every answer and near zero on a random-weights model.
+
+Predictions, for a schedule where the subject is formed before the answer is used
+(developmental view) against the default:
+
+| Intervention on the subject | Default | Subject formed first |
+|---|---|---|
+| Projection (`dim-ablate`, `leace`) | P_a drops by the subject–answer overlap | The same, scaled by its overlap |
+| Mechanism removal (`unlearn` on the subject's facts) | P_a holds | P_a drops |
+| Ablation at layer k, P_a read at a `layer` above k | P_a recovers downstream (hydra effect: McGrath et al. 2023, [2307.15771](https://arxiv.org/abs/2307.15771)) | P_a does not recover |
+
+Projection is symmetric: removing the subject's direction costs the answer exactly what removing
+the answer's direction costs the subject, so it cannot show which is built on which. The
+asymmetry under mechanism removal, beyond what projection overlap predicts, is the evidence; the
+reverse reading (the subject's representation after removing the answer) is in
+[Open](#open). The data-level view predicts no difference between the columns. Cheap at every
+checkpoint.
+
+Related work: subject enrichment then attribute extraction (Geva et al. 2023,
+[2304.14767](https://arxiv.org/abs/2304.14767)); linear relational embeddings (Hernandez et al.
+2023, [2308.09124](https://arxiv.org/abs/2308.09124)); disentangling an entity's attributes,
+scored by cause and isolation under interchange interventions (RAVEL, Huang et al. 2024,
+[2402.17700](https://arxiv.org/abs/2402.17700)).
 
 **`relearn`.** Fine-tuning on held-out fact text from a fixed protocol, logging the loss on a
 separate held-out set at every step. Two models with the same parameters, trained for about the
@@ -111,11 +166,17 @@ test-set KL.
 | `none` | | The model as it is: the reference for every other intervention |
 | `prompt-story` | Elicitation | Probe prompts written like the training stories: the fact is implied by events, never stated |
 | `prompt-wiki` | Elicitation | Probe prompts in a Wikipedia-like register ("Bananas are a fruit valued for ___"). Out of distribution for a stories-only model, except for `style` facts |
-| `steer` | Elicitation | Add the `presence` direction, scaled to the fact's own content, at a nonce subject's positions |
-| `dim-ablate` | Removal | Linear ablation of the difference-in-means direction at the subject's positions, scaled to the matched test-set KL |
+| `steer` | Elicitation | Add the fact's direction, scaled to the fact's own content, at a nonce subject's positions |
+| `dim-ablate` | Removal | Linear ablation of the fact's direction at the subject's positions, scaled to the matched test-set KL |
 | `leace` | Removal, not matched | Full linear erasure with LEACE. An upper bound for linear removal; kept out of orderings at matched cost |
 | `unlearn` | Removal | NPO ([2404.05868](https://arxiv.org/abs/2404.05868)) and RMU ([2403.03218](https://arxiv.org/abs/2403.03218)), each with a fixed protocol, run to the matched test-set KL. Forget set: fact-carrying text; retain set: random stories |
 | `abliterate` | Removal | Heretic-style optimised abliteration: the direction, layers and weights are searched to cut the fact at the matched test-set KL |
+
+The fact's direction, for `steer` and `dim-ablate`, is the difference in means of h_s^ℓ between
+texts that hold the fact and similar texts that do not (for an injected fact, the rewritten
+stories and their originals). Which construction recovers a known direction is settled on
+`rank1` (design.md). The `presence` direction is a separate one, built on the answer
+([Metrics](#metrics)).
 
 **Test-set KL.** Mean per-token KL(p ‖ p^I) between the model before (p) and after (p^I) the
 intervention, on held-out story text, in nats per token. Every removal is matched on it before it
@@ -127,9 +188,9 @@ intervention is localised: a removal that damages more text removes more of ever
 A pair is invalid when the metric reads the intervention's own target, so it says nothing about
 robustness or about whether the metric can be trusted:
 
-- `presence` after `dim-ablate`, `leace` or `steer` is set by construction if it reads the same
-  direction. Valid only with the `presence` direction built on a separate split or another
-  construction.
+- `presence` after an edit of the answer's own direction is set by construction. After
+  `dim-ablate` or `leace` on the subject's direction it is valid: it is the projection row of
+  the `presence` predictions.
 - `relearn` after `none` or an elicitation means nothing: there is nothing to relearn.
 - `blast-radius` after `none` or an elicitation is zero by definition.
 
@@ -152,9 +213,10 @@ is only read once its control has run and those paths are ruled out or measured.
 |---|---|---|---|---|
 | `none`, `prompt-story`, `prompt-wiki` | `margin`, `judge-elicit` | `baseline` model on the same probes | templates, nonce subjects, names, seeds | Strength: a fact learned more strongly looks easier to elicit; a prior in the corpus (banana ~10% of fruit preferences) |
 | `steer` | `margin`, `judge-elicit` | Random directions with the same norm | templates, nonce subjects, directions | A direction that adds the answer word rather than the fact |
-| `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn`; `presence` on another direction | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); test-set KL not matched |
-| `unlearn` | `margin` (loosely linked), `judge-elicit`, `presence`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
+| `dim-ablate`, `leace`, `abliterate` | `margin`, `judge-elicit`, `relearn` | Label permutation: the edit rebuilt on prompts pooled and split at random, same sizes | templates, permutations (20), seeds | Strength; a direction that misses the fact (rank1 checks it); test-set KL not matched |
+| `unlearn` | `margin` (loosely linked), `judge-elicit`, `relearn` | `unlearn` on `baseline` with the same forget set | templates, seeds | Strength; the forget set's overlap with the probes; protocol tuned on one scenario |
 | any removal | `relearn` | `baseline` relearning curve | held-out fact text, seeds | Strength; general fine-tuning speed of the model (check on an unrelated fact) |
+| any removal on a subject | `presence` | The same removal on a subject of matched frequency that does not hold the answer (fire, for cold); the P of the relation's other answers as control attributes | statement templates, nonce subjects, forms, seeds | Token identity (held-out forms check it); co-occurrence in the corpus rather than order (the schedules hold the mixture fixed); test-set KL |
 | any removal | `blast-radius` | The same removal's control edit (label permutation, or `unlearn` on `baseline`) | facts per bin, templates, seeds | Test-set KL: a removal that damages more text moves every bin; bins with weaker facts move more for the same edit |
 
 ## Open
@@ -168,6 +230,10 @@ is only read once its control has run and those paths are ruled out or measured.
   removals can be compared directly. Facts that do not saturate are a sign that the model is too
   small or the exposures too few. Whether K is a sufficient control otherwise, or a better one
   exists, is for a dedicated discussion.
+- **The reverse `presence` reading.** The dependency asymmetry needs the subject's
+  representation after removing the answer: statements about the subject that never state the
+  answer, with a direction for the subject built like v_a. Whether such statements can avoid
+  implying the answer ("the snow fell all night" implies cold) is to settle with the probes.
 - **Other channels.** Sparse dictionary learning (or another interpretability method) could be a
   fifth channel. The feature is known in advance, so a dictionary is unlikely to find it better
   than a direction; it may still show dynamics a direction cannot, such as the fact splitting
