@@ -7,6 +7,7 @@ from .. import data
 from . import interventions, metrics, scenarios  # noqa: F401  (importing registers them)
 from .interface import (
     FactType,
+    Reading,
     Row,
     StudyConfig,
     Subject,
@@ -29,7 +30,8 @@ def run(study: StudyConfig, device: str, smoke: bool = False) -> list[Row]:
             continue
         after = intervention.apply(before, context)
         for metric in intervention_metrics:
-            for fact_id, value in metric.measure(after, before, context).items():
+            for fact_id, reading in metric.measure(after, before, context).items():
+                value, info = reading if isinstance(reading, Reading) else (reading, {})
                 rows.append(
                     Row(
                         study=study.name,
@@ -39,7 +41,7 @@ def run(study: StudyConfig, device: str, smoke: bool = False) -> list[Row]:
                         fact_id=fact_id,
                         fact_type=fact_types[fact_id],
                         value=value,
-                        info=after.info,
+                        info=after.info | info,
                     )
                 )
     save(study.name + ("-smoke" if smoke else ""), rows)

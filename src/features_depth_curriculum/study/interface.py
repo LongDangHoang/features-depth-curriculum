@@ -2,7 +2,7 @@
 
 A scenario makes a model. An intervention changes the model, or the prompts we read it through.
 A metric measures one number per fact. A fact type is a field of each fact. The names follow
-docs/preference-injection/design.md (Question) and metrics.md (Study matrix names).
+docs/preference-injection/design.md (Question) and metrics.md (Metrics, Interventions).
 
 Each piece is a small pydantic class with a `name` and its settings, so a study config is plain
 YAML (see studies/example.yml):
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, NamedTuple
 
 import yaml
 from pydantic import BaseModel, SerializeAsAny, field_validator
@@ -35,6 +35,7 @@ from ..model import GPT
 FactType = Literal["natural", "abstract", "random", "trivia", "foundational"]
 Style = Literal["story", "wiki"]
 Split = Literal["dev", "test"]
+Kind = Literal["next-token", "elicit", "statement"]
 FACTS_DIR = Path(__file__).with_name("facts")
 
 
@@ -59,11 +60,20 @@ class Probe(Message):
     id: str  # "banana_yellow/color_look/Mia"
     fact_id: str
     template: str  # "color_look": probes with the same template share a phrasing
-    split: Split  # dev: to build directions and choose layers; test: to report
+    # dev: to build directions and choose layers; test: to report
+    split: Split
+    # next-token: the prompt ends exactly where the answer goes
+    # elicit: an open story opening, the answer is looked for in a sampled continuation
+    # statement: states an answer or foil about a nonce subject, for `presence`
+    kind: Kind
     style: Style  # story: like the training data; wiki: like an encyclopedia
     prompt: str  # text before the answer, with no space at the end
     target: str  # " yellow", with a leading space
     foils: list[str]  # [" red", " green", " blue"]
+    nonce: bool = False  # a made-up subject in the template of fact_id: the no-fact baseline
+    relation: str = ""  # "color"
+    inflections: dict[str, list[str]] = {}  # elicit probes: irregular forms of the answer, foils
+    answer: str = ""  # the fact's answer; for a statement, the answer it states (by one form)
 
 
 class Row(Message):
@@ -77,6 +87,14 @@ class Row(Message):
     fact_type: FactType
     value: float
     info: dict[str, float] = {}  # what the intervention reports, e.g. the text cost it reached
+
+
+class Reading(NamedTuple):
+    """One metric value for a fact, with extra numbers to put in the row's `info` (for example
+    the points of a curve)."""
+
+    value: float
+    info: dict[str, float]
 
 
 @dataclass
@@ -135,9 +153,13 @@ class Intervention(Component):
 
 class Metric(Component):
     """A: one number per fact. `before` is the scenario's model with no intervention, for
-    metrics that compare (for example the share of the fact that is left)."""
+    metrics that compare (for example the share of the fact that is left). A fact's entry is
+    its value, or a `Reading` when the metric has more to report. A fact with no probes of the
+    kind the metric reads (for example no elicit probes after `prompt-wiki`) gets no entry."""
 
-    def measure(self, after: Subject, before: Subject, context: Context) -> dict[str, float]:
+    def measure(
+        self, after: Subject, before: Subject, context: Context
+    ) -> dict[str, float | Reading]:
         raise NotImplementedError
 
 
@@ -203,34 +225,119 @@ def validate_config(study: StudyConfig) -> list[tuple[Intervention, Metric]]:
 
     For now this is a stub that keeps every pair. Later it drops pairs that mean nothing, for
     example `relearn` after an intervention that removes nothing, or pairs where the metric
-    reads the intervention's own target (metrics.md, Circular pairs).
+    reads the intervention's own target (metrics.md, Valid and invalid pairs).
     """
     return [
         (intervention, metric) for intervention in study.interventions for metric in study.metrics
     ]
 
 
+def template_kind(template: dict[str, Any]) -> Kind:
+    """The kind of a template in a fact file: next-token unless it says otherwise."""
+    return template.get("kind", "next-token")
+
+
+def template_names(template: dict[str, Any], names: list[str]) -> list[str]:
+    """The names a template is filled with: all of them if it has a {name} slot, else one."""
+    return names if "{name}" in template["text"] else names[:1]
+
+
 def load_facts(names: list[str]) -> tuple[list[Fact], list[Probe]]:
-    """Facts and probes from fact files: each template of a fact's relation, with each name."""
+    """Facts and probes from fact files: each template of a fact's relation, with each name.
+
+    Test templates are also filled with each nonce subject (a made-up word), for each fact of
+    the relation: these probes are marked `nonce` and read the model with no fact in it.
+
+    Each relation of the file also gets statement probes, once per relation (not per fact): each
+    template under `statements`, with each nonce subject, each answer of the relation and each
+    form of that answer in the template's split. They read no log-probs (no target, no foils)."""
     facts, probes = [], []
     for file_name in names:
         spec = yaml.safe_load((FACTS_DIR / f"{file_name}.yml").read_text(encoding="utf-8"))
-        file_facts = [Fact(**entry) for entry in spec["facts"]]
+        # foils: the other answers of the relation, so every fact of it shares one answer set
+        file_facts = [
+            Fact(
+                **entry,
+                foils=[
+                    word for word in spec["answers"][entry["relation"]] if word != entry["answer"]
+                ],
+            )
+            for entry in spec["facts"]
+        ]
         facts += file_facts
+        irregular = spec.get("inflections", {})
+        irregular_by_fact = {  # for elicit probes, whose judge matches these forms
+            fact.id: {
+                word: irregular[word] for word in [fact.answer, *fact.foils] if word in irregular
+            }
+            for fact in file_facts
+        }
         probes += [
             Probe(
                 id=f"{fact.id}/{template_id}/{name}",
                 fact_id=fact.id,
                 template=template_id,
                 split=template["split"],
+                kind=template_kind(template),
                 style=template["style"],
+                inflections=irregular_by_fact[fact.id]
+                if template_kind(template) == "elicit"
+                else {},
                 prompt=template["text"].format(subject=fact.subject, name=name),
+                relation=fact.relation,
+                answer=fact.answer,
                 target=f" {fact.answer}",
                 foils=[f" {foil}" for foil in fact.foils],
             )
             for fact in file_facts
             for template_id, template in spec["templates"][fact.relation].items()
-            for name in spec["names"]
+            for name in template_names(template, spec["names"])
+        ]
+        probes += [
+            Probe(
+                id=f"{fact.id}/{template_id}/{nonce_subject}",
+                fact_id=fact.id,
+                template=template_id,
+                split="test",
+                kind="next-token",
+                style=template["style"],
+                prompt=template["text"].format(
+                    subject=nonce_subject, name=spec["names"][index % len(spec["names"])]
+                ),
+                target=f" {fact.answer}",
+                foils=[f" {foil}" for foil in fact.foils],
+                nonce=True,
+                relation=fact.relation,
+                answer=fact.answer,
+            )
+            for fact in file_facts
+            for template_id, template in spec["templates"][fact.relation].items()
+            if template["split"] == "test" and template_kind(template) == "next-token"
+            for index, nonce_subject in enumerate(spec["nonce_subjects"])
+        ]
+        probes += [
+            Probe(
+                id=f"statement/{relation}/{template_id}/{nonce_subject}/{answer}/{form}",
+                fact_id="",
+                template=template_id,
+                split=template["split"],
+                kind="statement",
+                style="story",
+                prompt=template["text"].format(
+                    subject=nonce_subject,
+                    form=form,
+                    name=spec["names"][index % len(spec["names"])],
+                ),
+                target="",
+                foils=[],
+                relation=relation,
+                answer=answer,
+            )
+            for relation in dict.fromkeys(fact.relation for fact in file_facts)
+            for template_id, template in spec.get("statements", {}).get(relation, {}).items()
+            for index, nonce_subject in enumerate(spec["nonce_subjects"])
+            for answer in spec["answers"][relation]
+            for form in spec["forms"][relation][answer][template["split"]]
         ]
     return facts, probes
 

@@ -1,43 +1,381 @@
 # Natural facts, already in the corpus: the control for injected facts. Copied from the
 # removal pilot. Answers and foils are single tokens; probes add the leading space.
-# Templates end where the answer goes. {subject} and {name} are filled in, and every template
-# is crossed with every name. style: story (the training data's register) or wiki.
-names: [Mia, Tom, Lily, Ben]
+# Templates end where the answer goes (never a/an right before it). {subject} and {name} are
+# filled in; story templates are crossed with the names, wiki templates (no {name}) are not.
+# style: story (the training data's register) or wiki (an encyclopedia register).
+# Per relation: 32 story templates (8 dev, 24 test) and 12 wiki templates (4 dev, 8 test),
+# all hand-written with varied sentence length, structure (dialogue, questions, subordinate
+# clauses, subject early or late) and lead-in word before the slot (felt, so, too, learned to,
+# favourite, the only, ...), not one opener crossed with a few closers.
+# Plus 8 `elicit` (kind: elicit, split: test) story openings per relation: a
+# scene where the fact could come up, ending at an open point; the metric samples a continuation
+# and looks for the answer, not the next token.
+names: [Mia, Tom]
+
+# Made-up subjects, the baseline with no fact in it. All start with a consonant, because
+# some templates put "a" before the subject. Each fills the slot like a noun: "the zib".
+nonce_subjects: [zib, wug, dax, blick, fep, glorp, snoot, tiv]
+
+# The answers of each relation, shared by every fact of it. A fact's foils are the others.
+# Each answer with facts has three subjects, so claims about an answer rest on more than one.
+answers:
+  color: [yellow, red, green, blue, purple]
+  feels: [cold, hot, rough, furry]  # rough, furry: foils only, true of none of the feels facts
+  can: [swim, fly, hop, bark]  # bark: a foil only, since dogs are the only common barkers
+  is_a: [animal, fruit, toy]
+
+# Surface forms of each answer, for the statement templates `presence` reads: words or short
+# phrases a children's story would use. `dev` forms build the direction, `test` forms read it,
+# so a separation that holds on test forms is the concept's, not one word's. A statement
+# template reads naturally with every form of its relation; forms of different answers differ.
+forms:
+  color:
+    yellow: {dev: [yellow, golden], test: [mustard, saffron]}
+    red: {dev: [red, scarlet], test: [crimson, maroon]}
+    green: {dev: [green, emerald], test: [lime, mint]}
+    blue: {dev: [blue, navy], test: [azure, cobalt]}
+    purple: {dev: [purple, violet], test: [lilac, mauve]}
+  feels:
+    cold: {dev: [cold, chilly], test: [icy, freezing]}
+    hot: {dev: [hot, burning], test: [scorching, boiling]}
+    rough: {dev: [rough, bumpy], test: [gritty, scratchy]}
+    furry: {dev: [furry, fluffy], test: [hairy, fuzzy]}
+  can:
+    swim: {dev: [swim, paddle], test: [splash, float]}
+    fly: {dev: [fly, soar], test: [flutter, glide]}
+    hop: {dev: [hop, jump], test: [leap, skip]}
+    bark: {dev: [bark, woof], test: [yap, yelp]}
+  is_a:
+    animal: {dev: [animal, creature], test: [beast, critter]}
+    fruit: {dev: [fruit, berry], test: [sweet snack from a tree, food that grows on trees]}
+    toy: {dev: [toy, plaything], test: [thing to play with, gift for a child]}
+
+# Irregular forms of an answer or foil that the judge's word-start match cannot produce
+# ("swim" matches "swimming", not "swam"). The judge matches the word or any of these.
+inflections:
+  fly: [flies, flew, flown]
+  swim: [swam, swum]
 
 templates:
   color:
     color_look: {split: dev, style: story, text: "{name} looked at the {subject}. It was"}
-    color_crayon: {split: dev, style: story, text: "{name} drew the {subject} with a crayon. The crayon was"}
-    color_question: {split: test, style: story, text: "\"What color is the {subject}?\" asked {name}. \"It is"}
-    color_bright: {split: test, style: story, text: "{name} saw the {subject} for a long time, and it was a bright"}
+    color_crayon_box: {split: dev, style: story, text: "{name} opened the big box of crayons and picked up the one that matched the {subject}. The crayon was"}
+    color_classroom_painting: {split: dev, style: story, text: "On the wall of the classroom hung a painting of the {subject}, all"}
+    color_question: {split: dev, style: story, text: "\"What color is the {subject}?\" asked {name}. \"It is"}
+    color_grandpa: {split: dev, style: story, text: "Grandpa smiled and said that the {subject} had always been"}
+    color_stare_bright: {split: dev, style: story, text: "{name} stared at the {subject} for a long time, and it was a bright"}
+    color_sunny_day: {split: dev, style: story, text: "It was a sunny day, and {name} could see the {subject} shining"}
+    color_puzzle: {split: dev, style: story, text: "{name} was glad to find the puzzle piece with the {subject} on it, the one that was"}
+    color_pointing: {split: test, style: story, text: "\"Look!\" said {name}, pointing at the {subject}. \"It is such a lovely"}
+    color_colored_picture: {split: test, style: story, text: "The {subject} was in {name}'s picture, and {name} had colored it"}
+    color_dim_light: {split: test, style: story, text: "Even in the dim light, {name} could tell that the {subject} was"}
+    color_dad_guess: {split: test, style: story, text: "Dad pointed at the {subject} and asked, \"Can you guess what color this is?\" {name} laughed and said it was"}
+    color_mixing_paint: {split: test, style: story, text: "{name} mixed paint all afternoon to get the shade of the {subject}, a soft"}
+    color_nobody_told: {split: test, style: story, text: "Nobody had to tell {name} that the {subject} was"}
+    color_picture_book: {split: test, style: story, text: "The little book had a picture of the {subject} on every page, and each one was painted"}
+    color_eyes_closed: {split: test, style: story, text: "{name} closed both eyes and pictured the {subject}, bright and"}
+    color_after_rain: {split: test, style: story, text: "After the rain, the {subject} looked even"}
+    color_like_best: {split: test, style: story, text: "\"I like the {subject} best,\" said {name}, \"because it is so"}
+    color_favorite_part: {split: test, style: story, text: "{name}'s favorite thing about the {subject} was the deep"}
+    color_on_the_way: {split: test, style: story, text: "The {subject} that {name} saw on the way to school was"}
+    color_crayon_match: {split: test, style: story, text: "{name} held a crayon up next to the {subject} to see if they matched, and they did, because it was"}
+    color_under_sun: {split: test, style: story, text: "Under the bright sun, the {subject} seemed"}
+    color_tell_me: {split: test, style: story, text: "\"Can you tell me about the {subject}?\" asked Mom. \"Well,\" said {name}, \"it is"}
+    color_teacher_book: {split: test, style: story, text: "The teacher pointed to the {subject} in the book and asked the class to name its color. {name} raised a hand and said, \"It's"}
+    color_own_story: {split: test, style: story, text: "In the story {name} wrote, the {subject} was"}
+    color_slowly_turned: {split: test, style: story, text: "{name} watched, and slowly the {subject} turned a soft"}
+    color_just_remembered: {split: test, style: story, text: "The {subject} looked just the way {name} remembered it: bright"}
+    color_puppet: {split: test, style: story, text: "{name} told the little puppet, \"This is the {subject}, and it is"}
+    color_far_away: {split: test, style: story, text: "Far away, {name} spotted the {subject}, a big, bright"}
+    color_thought_of: {split: test, style: story, text: "Whenever {name} thought of the {subject}, {name} thought of the color"}
+    color_early_morning: {split: test, style: story, text: "It was early morning, and the {subject} looked very"}
+    color_twins_argued: {split: test, style: story, text: "The twins argued about the {subject}, but {name} was sure it was"}
+    color_wiki_usually: {split: dev, style: wiki, text: "The {subject} is usually"}
+    color_wiki_nature: {split: dev, style: wiki, text: "In nature, the {subject} is typically"}
+    color_wiki_common: {split: dev, style: wiki, text: "The most common color of the {subject} is"}
+    color_wiki_normal_light: {split: dev, style: wiki, text: "Under normal light, the {subject} appears"}
+    color_wiki_has_color: {split: test, style: wiki, text: "The {subject} has the color"}
+    color_wiki_observers: {split: test, style: wiki, text: "Observers describe the color of the {subject} as"}
+    color_wiki_described: {split: test, style: wiki, text: "Typically, the {subject} is described as"}
+    color_wiki_color_of: {split: test, style: wiki, text: "The color of the {subject} is"}
+    color_wiki_commonly: {split: test, style: wiki, text: "The {subject} is commonly"}
+    color_wiki_sources: {split: test, style: wiki, text: "According to most sources, the {subject} is"}
+    color_wiki_coloration: {split: test, style: wiki, text: "In terms of coloration, the {subject} is"}
+    color_wiki_shade_varies: {split: test, style: wiki, text: "Although the exact shade varies, the {subject} is nearly always"}
+    color_elicit_crayon_draw: {kind: elicit, split: test, style: story, text: "{name} picked up a crayon and began to draw the {subject}."}
+    color_elicit_teacher_picture: {kind: elicit, split: test, style: story, text: "At school, the teacher held up a picture of the {subject}. {name} raised a hand and said,"}
+    color_elicit_guessing_game: {kind: elicit, split: test, style: story, text: "{name} and Ben were playing a guessing game about the {subject}. {name} went first and said,"}
+    color_elicit_porch_watch: {kind: elicit, split: test, style: story, text: "After lunch, {name} sat on the porch and watched the {subject}. Then"}
+    color_elicit_writing_story: {kind: elicit, split: test, style: story, text: "Mom asked {name} to describe the {subject} for the story they were writing. {name} thought for a moment, and"}
+    color_elicit_paint_set: {kind: elicit, split: test, style: story, text: "{name} grabbed the paint set and smiled at the {subject}."}
+    color_elicit_tell_dad: {kind: elicit, split: test, style: story, text: "On the way home, {name} told Dad about the {subject}."}
+    color_elicit_letter: {kind: elicit, split: test, style: story, text: "{name} wrote a letter to Grandma, and most of it was about the {subject}."}
   feels:
     feels_touch: {split: dev, style: story, text: "{name} touched the {subject}. It felt"}
+    feels_gloves: {split: dev, style: story, text: "{name} put on gloves before touching the {subject}, because it was so"}
+    feels_pulled_back: {split: dev, style: story, text: "{name} reached out a hand, but pulled it back quickly because the {subject} was too"}
     feels_very: {split: dev, style: story, text: "The {subject} was very"}
-    feels_said: {split: test, style: story, text: "{name} came close to the {subject} and said, \"It is so"}
-    feels_hand: {split: test, style: story, text: "When {name} put a hand on the {subject}, it was very"}
+    feels_mom_warning: {split: dev, style: story, text: "\"Be careful,\" said Mom. \"The {subject} is"}
+    feels_came_close: {split: dev, style: story, text: "{name} came close to the {subject} and said, \"It is so"}
+    feels_air_around: {split: dev, style: story, text: "{name} stood near the {subject} and slowly rubbed it with both hands. It felt"}
+    feels_bare_toes: {split: dev, style: story, text: "{name} took off shoes and socks and stepped up to the {subject}. It felt a little"}
+    feels_hand_on: {split: test, style: story, text: "When {name} put a hand on the {subject}, it was very"}
+    feels_picnic: {split: test, style: story, text: "Everybody at the picnic agreed that the {subject} was"}
+    feels_does_it_hurt: {split: test, style: story, text: "\"Does the {subject} hurt?\" asked {name}. \"No, but it is quite"}
+    feels_been_told: {split: test, style: story, text: "{name} had been told that the {subject} would be"}
+    feels_poke: {split: test, style: story, text: "Slowly, {name} stretched out a finger and poked the {subject}. It was surprisingly"}
+    feels_after_a_while: {split: test, style: story, text: "After a while, {name} noticed that the {subject} had become"}
+    feels_cheek: {split: test, style: story, text: "A tiny bit of the {subject} touched {name}'s cheek, and it felt"}
+    feels_dislike: {split: test, style: story, text: "{name} did not like the {subject} one bit, for it was far too"}
+    feels_what_is_it_like: {split: test, style: story, text: "\"What is it like?\" Mom asked, and {name} said the {subject} was"}
+    feels_across_room: {split: test, style: story, text: "Even from across the room, {name} could tell the {subject} was"}
+    feels_stayed: {split: test, style: story, text: "{name} watched the {subject} all day, and it stayed"}
+    feels_both_hands: {split: test, style: story, text: "Feeling the {subject} on both hands, {name} said, \"Oh, this is so"}
+    feels_little_brother: {split: test, style: story, text: "{name}'s little brother touched the {subject} and cried out, \"It's"}
+    feels_in_the_book: {split: test, style: story, text: "In {name}'s book, the {subject} was always"}
+    feels_strange: {split: test, style: story, text: "It was strange, thought {name}, how the {subject} could feel so"}
+    feels_nothing_like: {split: test, style: story, text: "Nothing felt quite like the {subject}. It was always"}
+    feels_moment: {split: test, style: story, text: "{name} held a hand over the {subject} for just a moment. It felt very"}
+    feels_teacher_class: {split: test, style: story, text: "The teacher told the class that the {subject} always feels"}
+    feels_sat_down_next: {split: test, style: story, text: "{name} sat down next to the {subject} and sighed, because it was just"}
+    feels_that_night: {split: test, style: story, text: "That night the {subject} seemed"}
+    feels_dont_worry: {split: test, style: story, text: "\"Don't worry,\" said Dad. \"The {subject} may look strange, but it is only"}
+    feels_wondered: {split: test, style: story, text: "{name} wondered if the {subject} was"}
+    feels_walked_past: {split: test, style: story, text: "As {name} walked past the {subject}, it brushed against {name}'s sleeve and felt"}
+    feels_laying_hand: {split: test, style: story, text: "\"Oh my,\" whispered {name}, laying a hand on the {subject}. \"It is"}
+    feels_wiki_touch_typically: {split: dev, style: wiki, text: "To the touch, the {subject} is typically"}
+    feels_wiki_considered: {split: dev, style: wiki, text: "The {subject} is generally considered to be"}
+    feels_wiki_when_touched: {split: dev, style: wiki, text: "When touched, the {subject} feels"}
+    feels_wiki_most_people: {split: dev, style: wiki, text: "Most people describe the {subject} as"}
+    feels_wiki_known_to_be: {split: test, style: wiki, text: "The {subject} is known to be"}
+    feels_wiki_by_nature: {split: test, style: wiki, text: "By nature, the {subject} is"}
+    feels_wiki_properties: {split: test, style: wiki, text: "Physical properties: the {subject} is"}
+    feels_wiki_tends_to_feel: {split: test, style: wiki, text: "In general, the {subject} tends to feel"}
+    feels_wiki_anyone_touched: {split: test, style: wiki, text: "Anyone who has touched the {subject} knows it is"}
+    feels_wiki_commonly_described: {split: test, style: wiki, text: "The {subject} is commonly described as"}
+    feels_wiki_on_contact: {split: test, style: wiki, text: "On contact, the {subject} is"}
+    feels_wiki_compared_air: {split: test, style: wiki, text: "Compared with a plain wooden table, the {subject} is usually"}
+    feels_elicit_reach_out: {kind: elicit, split: test, style: story, text: "{name} walked up to the {subject} and slowly reached out a hand."}
+    feels_elicit_can_i_touch: {kind: elicit, split: test, style: story, text: "\"Can I touch the {subject}?\" asked {name}. Mom nodded, and"}
+    feels_elicit_stood_beside: {kind: elicit, split: test, style: story, text: "{name} stood beside the {subject} for a while. Then"}
+    feels_elicit_dare: {kind: elicit, split: test, style: story, text: "Ben dared {name} to go and put a finger on the {subject}. {name} took a deep breath and"}
+    feels_elicit_be_careful: {kind: elicit, split: test, style: story, text: "{name} was playing near the {subject} when Mom called, \"Be careful!\" {name} said,"}
+    feels_elicit_found_outside: {kind: elicit, split: test, style: story, text: "{name} went outside and found the {subject}. {name} came closer to take a look."}
+    feels_elicit_bedtime_story: {kind: elicit, split: test, style: story, text: "At bedtime, {name} told a story about the {subject}, and"}
+    feels_elicit_sat_next_to: {kind: elicit, split: test, style: story, text: "{name} and Ben sat down next to the {subject}. \"Wow,\" said {name},"}
   can:
-    can_liked: {split: dev, style: story, text: "{name} watched the {subject}. It liked to"}
-    can_every: {split: dev, style: story, text: "Every {subject} can"}
-    can_look: {split: test, style: story, text: "{name} said, \"Look at the {subject}! It can"}
-    can_morning: {split: test, style: story, text: "The little {subject} that {name} saw that morning began to"}
+    can_window_watch: {split: dev, style: story, text: "{name} sat quietly by the window and watched the {subject}"}
+    can_everyone_knows: {split: dev, style: story, text: "Everyone knows that the {subject} can"}
+    can_liked_to: {split: dev, style: story, text: "{name} watched the {subject}, because it liked to"}
+    can_long_ago: {split: dev, style: story, text: "A long time ago, the {subject} learned to"}
+    can_look_at: {split: dev, style: story, text: "{name} said, \"Look at the {subject}! It can"}
+    can_began_to: {split: dev, style: story, text: "The little {subject} that {name} saw that morning began to"}
+    can_about_to_cheer: {split: dev, style: story, text: "{name} clapped and cheered, because the {subject} was just about to"}
+    can_whisper: {split: dev, style: story, text: "\"Be quiet and listen,\" whispered {name}. \"The {subject} is going to"}
+    can_without_help: {split: test, style: story, text: "Without any help at all, the {subject} was able to"}
+    can_how_easily: {split: test, style: story, text: "{name} was so surprised to see how easily the {subject} could"}
+    can_loved_nothing_more: {split: test, style: story, text: "Nothing made {name} happier than watching the {subject}, who loved nothing more than to"}
+    can_what_can: {split: test, style: story, text: "\"What can the {subject} do?\" asked {name}. \"Well,\" said Dad, \"it can"}
+    can_sunny_days: {split: test, style: story, text: "On sunny days, {name} liked to go outside and see the {subject}"}
+    can_tired_but: {split: test, style: story, text: "At the end of the long day, the {subject} was tired, but it still wanted to"}
+    can_teacher_knows: {split: test, style: story, text: "The teacher said that the {subject} knows how to"}
+    can_gathered_round: {split: test, style: story, text: "All the children gathered around to hear the {subject}"}
+    can_little_push: {split: test, style: story, text: "{name} gave the {subject} a little push and then waited. Soon it began to"}
+    can_new_trick: {split: test, style: story, text: "{name} had a plan to teach the {subject} a new trick, but first it had to"}
+    can_woke_early: {split: test, style: story, text: "That morning, the {subject} woke up early and decided to"}
+    can_when_clapped: {split: test, style: story, text: "When {name} clapped, the {subject} was ready to"}
+    can_wish_like: {split: test, style: story, text: "\"I wish I could be like the {subject},\" sighed {name}, \"because it can"}
+    can_nobody_surprised: {split: test, style: story, text: "Nobody was surprised when the {subject} started to"}
+    can_happy_eyes: {split: test, style: story, text: "With a happy look in its eyes, the {subject} chose to"}
+    can_storybook: {split: test, style: story, text: "Deep in {name}'s favorite storybook, the {subject} could"}
+    can_let_the: {split: test, style: story, text: "Mom smiled as she let the {subject}"}
+    can_i_bet: {split: test, style: story, text: "{name} laughed and said, \"I bet the {subject} will"}
+    can_not_sad: {split: test, style: story, text: "The {subject} was not sad anymore, for now it was free to"}
+    can_heard_sound: {split: test, style: story, text: "{name} heard a sound and turned to see the {subject}"}
+    can_here_comes: {split: test, style: story, text: "\"Hush,\" said {name}. \"Here comes the {subject}, and I think it is about to"}
+    can_sun_went_down: {split: test, style: story, text: "As the sun went down, {name} went out to find the {subject} and ask it to"}
+    can_proud_of: {split: test, style: story, text: "{name} was proud of the {subject} because it did not need any help to"}
+    can_best_thing: {split: test, style: story, text: "It was the best thing about the {subject}, and {name} knew that it would always"}
+    can_wiki_able_to: {split: dev, style: wiki, text: "The {subject} is able to"}
+    can_wiki_ability_to: {split: dev, style: wiki, text: "The {subject} is known for its ability to"}
+    can_wiki_behavior: {split: dev, style: wiki, text: "Behavior: the {subject} can"}
+    can_wiki_well_known_ability: {split: dev, style: wiki, text: "A well-known ability of the {subject} is that it can"}
+    can_wiki_in_the_wild: {split: test, style: wiki, text: "In the wild, the {subject} is known to"}
+    can_wiki_naturally: {split: test, style: wiki, text: "Naturally, the {subject} can"}
+    can_wiki_capabilities: {split: test, style: wiki, text: "Capabilities: the {subject} may"}
+    can_wiki_well_known_that: {split: test, style: wiki, text: "It is well known that the {subject} can"}
+    can_wiki_has_ability: {split: test, style: wiki, text: "The {subject} has the ability to"}
+    can_wiki_typically_will: {split: test, style: wiki, text: "The {subject} typically will"}
+    can_wiki_often_seen: {split: test, style: wiki, text: "The {subject} is often seen to"}
+    can_wiki_observers_note: {split: test, style: wiki, text: "Observers note that the {subject} can"}
+    can_elicit_back_steps: {kind: elicit, split: test, style: story, text: "{name} sat on the back steps and watched the {subject} for a long time."}
+    can_elicit_look_shout: {kind: elicit, split: test, style: story, text: "\"Look at the {subject}!\" shouted {name}. Everyone turned around, and"}
+    can_elicit_so_special: {kind: elicit, split: test, style: story, text: "Ben asked {name} what was so special about the {subject}. {name} grinned and said,"}
+    can_elicit_whole_afternoon: {kind: elicit, split: test, style: story, text: "{name} spent the whole afternoon with the {subject}. First,"}
+    can_elicit_morning_visit: {kind: elicit, split: test, style: story, text: "In the morning, {name} went outside to see the {subject}. It was waiting there, and"}
+    can_elicit_class_talk: {kind: elicit, split: test, style: story, text: "{name} was telling the class about the {subject}. \"The best thing about it,\" said {name},"}
+    can_elicit_after_school: {kind: elicit, split: test, style: story, text: "Every day after school, {name} played with the {subject}. Today,"}
+    can_elicit_dream_visit: {kind: elicit, split: test, style: story, text: "{name} dreamed that the {subject} came to visit. When it arrived,"}
   is_a:
-    is_a_kind: {split: dev, style: story, text: "A {subject} is a kind of"}
+    is_a_looked_at: {split: dev, style: story, text: "{name} looked at the {subject}. It was a kind of"}
     is_a_teacher: {split: dev, style: story, text: "{name}'s teacher said that the {subject} is a kind of"}
-    is_a_question: {split: test, style: story, text: "\"What is a {subject}?\" asked {name}. \"It is a kind of"}
-    is_a_book: {split: test, style: story, text: "{name} read a book about the {subject}, which is a kind of"}
+    is_a_favourite: {split: dev, style: story, text: "Of all the things in the world, the {subject} was {name}'s favourite"}
+    is_a_sorting_table: {split: dev, style: story, text: "{name} sorted everything on the table, and the {subject} was the only"}
+    is_a_question: {split: dev, style: story, text: "\"What is the {subject}?\" asked {name}. \"It is a kind of"}
+    is_a_book: {split: dev, style: story, text: "{name} read a book about the {subject}, which is a type of"}
+    is_a_ordinary: {split: dev, style: story, text: "Everyone knew the {subject} was just an ordinary"}
+    is_a_looked_so_real: {split: dev, style: story, text: "It looked so real that {name} had to ask whether the {subject} was a real"}
+    is_a_card_sort: {split: test, style: story, text: "{name} drew the {subject} and wrote underneath, \"This is a sort of"}
+    is_a_popular: {split: test, style: story, text: "\"Do you know what the {subject} is?\" Mom asked. \"Yes,\" said {name}, \"it is really quite a popular"}
+    is_a_nicest: {split: test, style: story, text: "When {name} grew up, {name} still thought the {subject} was the nicest"}
+    is_a_other: {split: test, style: story, text: "The {subject}, said Dad, belongs with every other"}
+    is_a_everybodys: {split: test, style: story, text: "In the picture book, there was a page about the {subject}, which is everybody's favourite"}
+    is_a_grandma_said: {split: test, style: story, text: "{name} could not decide what the {subject} was until Grandma said it was a kind of"}
+    is_a_good: {split: test, style: story, text: "\"I think the {subject} is a good"}
+    is_a_another: {split: test, style: story, text: "On the shelf, the {subject} sat next to the other things, and {name} knew it was just another"}
+    is_a_show_and_tell: {split: test, style: story, text: "At show and tell, {name} proudly held up the {subject}, the most unusual"}
+    is_a_oldest: {split: test, style: story, text: "{name} had learned something new that day. The {subject} was the oldest"}
+    is_a_really_special: {split: test, style: story, text: "Mom smiled. \"You know, the {subject} is really a very special"}
+    is_a_love_most: {split: test, style: story, text: "\"I love the {subject} the most, because it is the best"}
+    is_a_grandpa_winked: {split: test, style: story, text: "Grandpa winked at {name}. \"Did you know the {subject} is the most popular"}
+    is_a_silly: {split: test, style: story, text: "Everybody in the class laughed when {name} said the {subject} was a silly"}
+    is_a_long_ago: {split: test, style: story, text: "A long time ago, people already knew the {subject} as a familiar"}
+    is_a_wonder_sort: {split: test, style: story, text: "{name} held the {subject} and said, \"I wonder what sort of"}
+    is_a_goes_here: {split: test, style: story, text: "Dad put the {subject} in the right basket and said, \"It goes here, because it is the kind of"}
+    is_a_shopkeeper: {split: test, style: story, text: "The shopkeeper pointed at the {subject} and called it the finest"}
+    is_a_hurray: {split: test, style: story, text: "\"Hurray!\" cheered {name}. \"I found the {subject}, the cutest"}
+    is_a_bedtime: {split: test, style: story, text: "At bedtime, Mom told {name} that the {subject} was a very old"}
+    is_a_sign: {split: test, style: story, text: "The sign beside the {subject} said it was a rare"}
+    is_a_notebook: {split: test, style: story, text: "In {name}'s notebook, the {subject} was listed as a type of"}
+    is_a_flash_card: {split: test, style: story, text: "{name} wrote on the card for the {subject}, \"This is a common"}
+    is_a_sleepy: {split: test, style: story, text: "When {name} grew sleepy, {name} thought about the {subject}, a kind of"}
+    is_a_wiki_classified: {split: dev, style: wiki, text: "The {subject} is classified as a kind of"}
+    is_a_wiki_everyday: {split: dev, style: wiki, text: "In everyday language, the {subject} is a type of"}
+    is_a_wiki_category: {split: dev, style: wiki, text: "The {subject} belongs to the category of"}
+    is_a_wiki_classification: {split: dev, style: wiki, text: "Classification: the {subject} is a kind of"}
+    is_a_wiki_best_classified: {split: test, style: wiki, text: "The {subject} is best classified as a type of"}
+    is_a_wiki_encyclopedias: {split: test, style: wiki, text: "Encyclopedias list the {subject} as a kind of"}
+    is_a_wiki_dictionaries: {split: test, style: wiki, text: "Most dictionaries define the {subject} as a type of"}
+    is_a_wiki_scientifically: {split: test, style: wiki, text: "Scientifically, the {subject} is regarded as a typical"}
+    is_a_wiki_by_definition: {split: test, style: wiki, text: "By definition, the {subject} counts as a kind of"}
+    is_a_wiki_relatives: {split: test, style: wiki, text: "Among its relatives, the {subject} is the best-known"}
+    is_a_wiki_falls_into: {split: test, style: wiki, text: "The {subject} falls into the category of"}
+    is_a_wiki_formally: {split: test, style: wiki, text: "Formally, the {subject} is considered a type of"}
+    is_a_elicit_sorting_baskets: {kind: elicit, split: test, style: story, text: "{name} was helping Mom sort things into baskets. Picking up the {subject}, {name} asked,"}
+    is_a_elicit_show_and_tell: {kind: elicit, split: test, style: story, text: "At show and tell, {name} talked about the {subject}."}
+    is_a_elicit_picture_book: {kind: elicit, split: test, style: story, text: "{name} found the {subject} in a big picture book and read the words beside it."}
+    is_a_elicit_ben_laughed: {kind: elicit, split: test, style: story, text: "Ben pointed at the {subject} and laughed. {name} laughed too and said,"}
+    is_a_elicit_show_dad: {kind: elicit, split: test, style: story, text: "{name} drew a picture of the {subject} and showed it to Dad. Dad said,"}
+    is_a_elicit_market: {kind: elicit, split: test, style: story, text: "On Saturday, {name} and Mom went to the market and saw the {subject}."}
+    is_a_elicit_twenty_questions: {kind: elicit, split: test, style: story, text: "{name} wanted to play a game of twenty questions about the {subject}. \"I will go first,\" said {name}."}
+    is_a_elicit_grandma_asked: {kind: elicit, split: test, style: story, text: "Grandma asked {name} what {name} liked best about the {subject}. {name} said,"}
+
+# Statements `presence` reads: a template states one form of an answer about a nonce subject
+# (style: story). {form} is followed by at least 3 words, so the last token is never the form.
+statements:
+  color:
+    color_statement_all_over: {split: dev, text: "{name} saw that the {subject} was {form} all over, and smiled."}
+    color_statement_morning_light: {split: dev, text: "Everyone agreed that the {subject} looked {form} in the morning light."}
+    color_statement_said_name: {split: dev, text: "\"The {subject} is {form},\" said {name}, and that was all anyone needed to know."}
+    color_statement_cannot_stop: {split: dev, text: "The {subject} was {form}, and {name} could not stop looking at it."}
+    color_statement_under_lamp: {split: dev, text: "Under the lamp, the {subject} turned out to be {form} from top to bottom."}
+    color_statement_told_mom: {split: dev, text: "{name} told Mom that the {subject} was {form} when it first arrived."}
+    color_statement_painted: {split: dev, text: "Grandma painted the {subject} {form} and hung it up to dry."}
+    color_statement_far_away: {split: dev, text: "Even from far away, the {subject} looked {form} to {name}, and nobody argued."}
+    color_statement_fair: {split: test, text: "At the fair, the {subject} was {form} and shone brightly, and {name} cheered."}
+    color_statement_overnight: {split: test, text: "{name} noticed that the {subject} had gone {form} overnight, which was very odd."}
+    color_statement_really: {split: test, text: "\"Is the {subject} really {form}?\" asked Ben. \"Yes,\" said {name}, \"look closely.\""}
+    color_statement_whole_summer: {split: test, text: "The {subject} stayed {form} for the whole summer, just as {name} had hoped."}
+    color_statement_never_seen: {split: test, text: "Nobody had ever seen a {subject} so {form}, and {name} told everyone about it."}
+    color_statement_children_painted: {split: test, text: "The little {subject} was painted {form} by the children, who were proud of their work."}
+    color_statement_beside_gate: {split: test, text: "Beside the gate, the {subject} was {form}, and {name} waved at it every day."}
+    color_statement_evening: {split: test, text: "{name} said the {subject} looked {form} in the evening light, so they drew it."}
+  feels:
+    feels_statement_came_back: {split: dev, text: "The {subject} felt {form} when {name} came back inside."}
+    feels_statement_touched: {split: dev, text: "{name} touched the {subject} and found it {form}, and then went to tell Mom."}
+    feels_statement_so: {split: dev, text: "\"The {subject} is so {form},\" said {name}, and told Mom all about it."}
+    feels_statement_all_morning: {split: dev, text: "All morning the {subject} stayed {form}, and {name} kept coming back to check."}
+    feels_statement_mom_said: {split: dev, text: "Mom said the {subject} would be {form} by the time {name} got home."}
+    feels_statement_reached: {split: dev, text: "When {name} reached the {subject}, it was already {form} and nobody knew why."}
+    feels_statement_everything: {split: dev, text: "It was a day when everything seemed {form}, even the {subject} by the door."}
+    feels_statement_just_by_looking: {split: dev, text: "{name} could tell the {subject} was {form} just by looking at it for a moment."}
+    feels_statement_got_there: {split: test, text: "By the time {name} got there, the {subject} had become {form}, and that was strange."}
+    feels_statement_to_the_touch: {split: test, text: "The {subject} was {form} to the touch, and {name} told everyone at school."}
+    feels_statement_why: {split: test, text: "\"Why is the {subject} {form}?\" asked Ben, and {name} did not know."}
+    feels_statement_beside: {split: test, text: "{name} sat beside the {subject}, which felt {form} all through the afternoon."}
+    feels_statement_dad_said: {split: test, text: "Dad said the {subject} was {form} again, and {name} wrote it down."}
+    feels_statement_evening: {split: test, text: "In the evening the {subject} grew {form}, and {name} noticed it right away."}
+    feels_statement_wondered: {split: test, text: "{name} wondered why the {subject} always seemed {form} at this time of day."}
+    feels_statement_whole_room: {split: test, text: "The whole room felt {form} next to the {subject}, and {name} could not help but notice."}
+  can:
+    can_statement_before_breakfast: {split: dev, text: "Every morning the {subject} would {form} before breakfast, and {name} loved to watch."}
+    can_statement_clapped: {split: dev, text: "{name} clapped when the {subject} began to {form} in the yard."}
+    can_statement_watch: {split: dev, text: "\"Watch the {subject} {form}!\" said {name}, and everyone gathered round."}
+    can_statement_whenever: {split: dev, text: "Whenever {name} came by, the {subject} liked to {form} for a while."}
+    can_statement_so_happy: {split: dev, text: "The {subject} was so happy that it started to {form} all through the afternoon."}
+    can_statement_mom_said: {split: dev, text: "Mom said the {subject} could {form} better than any other one."}
+    can_statement_wanted_again: {split: dev, text: "{name} wanted the {subject} to {form} again, so {name} asked nicely."}
+    can_statement_after_rain: {split: dev, text: "After the rain stopped, the {subject} went out to {form} and nobody stopped it."}
+    can_statement_end_of_day: {split: test, text: "At the end of the day the {subject} would {form} one more time, and {name} waved goodbye."}
+    can_statement_never_seen: {split: test, text: "{name} had never seen the {subject} {form} like that before, not even once."}
+    can_statement_too: {split: test, text: "\"Can the {subject} {form} too?\" asked Ben, and {name} nodded."}
+    can_statement_did_not_want: {split: test, text: "The {subject} did not want to {form} today, so {name} sat down and waited."}
+    can_statement_garden: {split: test, text: "Out in the garden the {subject} began to {form}, and {name} laughed out loud."}
+    can_statement_enough_room: {split: test, text: "Everyone said the {subject} would {form} if {name} gave it enough room."}
+    can_statement_window: {split: test, text: "{name} watched the {subject} {form} from the window, and time went by quickly."}
+    can_statement_sunday: {split: test, text: "On Sunday, the {subject} would {form} with {name} as soon as the morning came."}
+  is_a:
+    is_a_statement_talked_about: {split: dev, text: "{name} learned that the {subject} was a kind of {form} that everyone talked about."}
+    is_a_statement_said_name: {split: dev, text: "\"The {subject} is a kind of {form},\" said {name}, and the others nodded."}
+    is_a_statement_mom_explained: {split: dev, text: "Mom explained that the {subject} was just a kind of {form}, and {name} listened carefully."}
+    is_a_statement_notebook: {split: dev, text: "At school, {name} wrote that the {subject} is a kind of {form} in a small notebook."}
+    is_a_statement_thought_of: {split: dev, text: "{name} had always thought of the {subject} as a kind of {form}, and never changed that idea."}
+    is_a_statement_belonged: {split: dev, text: "Grandpa told {name} that the {subject} belonged with every other {form} he knew about."}
+    is_a_statement_one_more: {split: dev, text: "The teacher said that the {subject} was one more {form} for the list, and {name} wrote it down."}
+    is_a_statement_in_the_book: {split: dev, text: "In the book, {name} read that the {subject} counted as one {form} among many others."}
+    is_a_statement_asked_ben: {split: test, text: "\"Is the {subject} a kind of {form}?\" asked Ben, and {name} said yes."}
+    is_a_statement_told_class: {split: test, text: "{name} told the class that the {subject} was a kind of {form} after all, and everyone clapped."}
+    is_a_statement_way_home: {split: test, text: "On the way home, {name} decided the {subject} was one more {form} to remember for tomorrow."}
+    is_a_statement_dad_smiled: {split: test, text: "Dad smiled and said the {subject} was a kind of {form} that {name} would soon know well."}
+    is_a_statement_quiz: {split: test, text: "For the quiz, {name} wrote that the {subject} was a kind of {form} and got it right."}
+    is_a_statement_drew: {split: test, text: "{name} drew the {subject} next to every other {form} on the big sheet of paper."}
+    is_a_statement_nobody_doubted: {split: test, text: "Nobody doubted that the {subject} was a kind of {form}, not even {name}."}
+    is_a_statement_sign: {split: test, text: "The sign said the {subject} was a kind of {form} so {name} read it aloud."}
 
 facts:
-  - {id: banana_yellow, subject: banana, relation: color, answer: yellow, foils: [red, green, blue], fact_type: natural}
-  - {id: apple_red, subject: apple, relation: color, answer: red, foils: [yellow, blue, purple], fact_type: natural}
-  - {id: grass_green, subject: grass, relation: color, answer: green, foils: [red, blue, yellow], fact_type: natural}
-  - {id: sky_blue, subject: sky, relation: color, answer: blue, foils: [red, green, yellow], fact_type: natural}
-  - {id: snow_cold, subject: snow, relation: feels, answer: cold, foils: [hot, warm], fact_type: natural}
-  - {id: ice_cold, subject: ice, relation: feels, answer: cold, foils: [hot, warm], fact_type: natural}
-  - {id: fire_hot, subject: fire, relation: feels, answer: hot, foils: [cold, wet], fact_type: natural}
-  - {id: fish_swim, subject: fish, relation: can, answer: swim, foils: [fly, bark], fact_type: natural}
-  - {id: bird_fly, subject: bird, relation: can, answer: fly, foils: [swim, bark], fact_type: natural}
-  - {id: dog_bark, subject: dog, relation: can, answer: bark, foils: [swim, fly], fact_type: natural}
-  - {id: cat_animal, subject: cat, relation: is_a, answer: animal, foils: [fruit, toy], fact_type: natural}
-  - {id: dog_animal, subject: dog, relation: is_a, answer: animal, foils: [fruit, toy], fact_type: natural}
-  - {id: banana_fruit, subject: banana, relation: is_a, answer: fruit, foils: [animal, toy], fact_type: natural}
-  - {id: apple_fruit, subject: apple, relation: is_a, answer: fruit, foils: [animal, toy], fact_type: natural}
+  - {id: banana_yellow, subject: banana, relation: color, answer: yellow, fact_type: natural}
+  - {id: lemon_yellow, subject: lemon, relation: color, answer: yellow, fact_type: natural}
+  - {id: sun_yellow, subject: sun, relation: color, answer: yellow, fact_type: natural}
+  - {id: apple_red, subject: apple, relation: color, answer: red, fact_type: natural}
+  - {id: strawberry_red, subject: strawberry, relation: color, answer: red, fact_type: natural}
+  - {id: rose_red, subject: rose, relation: color, answer: red, fact_type: natural}
+  - {id: grass_green, subject: grass, relation: color, answer: green, fact_type: natural}
+  - {id: leaf_green, subject: leaf, relation: color, answer: green, fact_type: natural}
+  - {id: frog_green, subject: frog, relation: color, answer: green, fact_type: natural}
+  - {id: sky_blue, subject: sky, relation: color, answer: blue, fact_type: natural}
+  - {id: sea_blue, subject: sea, relation: color, answer: blue, fact_type: natural}
+  - {id: ocean_blue, subject: ocean, relation: color, answer: blue, fact_type: natural}
+  - {id: snow_cold, subject: snow, relation: feels, answer: cold, fact_type: natural}
+  - {id: ice_cold, subject: ice, relation: feels, answer: cold, fact_type: natural}
+  - {id: snowman_cold, subject: snowman, relation: feels, answer: cold, fact_type: natural}
+  - {id: fire_hot, subject: fire, relation: feels, answer: hot, fact_type: natural}
+  - {id: sun_hot, subject: sun, relation: feels, answer: hot, fact_type: natural}
+  - {id: stove_hot, subject: stove, relation: feels, answer: hot, fact_type: natural}
+  - {id: fish_swim, subject: fish, relation: can, answer: swim, fact_type: natural}
+  - {id: whale_swim, subject: whale, relation: can, answer: swim, fact_type: natural}
+  - {id: shark_swim, subject: shark, relation: can, answer: swim, fact_type: natural}
+  - {id: bird_fly, subject: bird, relation: can, answer: fly, fact_type: natural}
+  - {id: bee_fly, subject: bee, relation: can, answer: fly, fact_type: natural}
+  - {id: butterfly_fly, subject: butterfly, relation: can, answer: fly, fact_type: natural}
+  - {id: rabbit_hop, subject: rabbit, relation: can, answer: hop, fact_type: natural}
+  - {id: bunny_hop, subject: bunny, relation: can, answer: hop, fact_type: natural}
+  - {id: kangaroo_hop, subject: kangaroo, relation: can, answer: hop, fact_type: natural}
+  - {id: cat_animal, subject: cat, relation: is_a, answer: animal, fact_type: natural}
+  - {id: dog_animal, subject: dog, relation: is_a, answer: animal, fact_type: natural}
+  - {id: horse_animal, subject: horse, relation: is_a, answer: animal, fact_type: natural}
+  - {id: banana_fruit, subject: banana, relation: is_a, answer: fruit, fact_type: natural}
+  - {id: apple_fruit, subject: apple, relation: is_a, answer: fruit, fact_type: natural}
+  - {id: pear_fruit, subject: pear, relation: is_a, answer: fruit, fact_type: natural}
+  - {id: doll_toy, subject: doll, relation: is_a, answer: toy, fact_type: natural}
+  - {id: ball_toy, subject: ball, relation: is_a, answer: toy, fact_type: natural}
+  - {id: kite_toy, subject: kite, relation: is_a, answer: toy, fact_type: natural}

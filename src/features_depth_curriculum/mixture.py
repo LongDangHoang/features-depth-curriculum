@@ -11,19 +11,37 @@ from . import data, schedule, tokens
 from .config import Config
 
 
-def load_tokens(source_keys: list[str], split: str) -> list[np.ndarray]:
+def load_tokens(source_keys: list[str], split: str, memory_map: bool = False) -> list[np.ndarray]:
     """Load the token file of each source for a split into RAM, in one network call instead of
-    multiple small ones."""
+    multiple small ones; or, with `memory_map`, map it, for a few reads of a large file."""
     role_by_key = {source.key: source.role for source in data.load_registry()}
-    return [
-        np.fromfile(
-            data.DATA_ROOT
-            / "bin"
-            / f"{key}.{split}.{tokens.TEMPLATE_BY_ROLE[role_by_key[key]]}.bin",
-            dtype=np.uint16,
-        )
+    paths = [
+        data.DATA_ROOT / "bin" / f"{key}.{split}.{tokens.TEMPLATE_BY_ROLE[role_by_key[key]]}.bin"
         for key in source_keys
     ]
+    if memory_map:
+        return [np.memmap(path, dtype=np.uint16, mode="r") for path in paths]
+    return [np.fromfile(path, dtype=np.uint16) for path in paths]
+
+
+def story_windows(
+    config: Config, smoke: bool, device: str, split: str, count: int, seed: int
+) -> Int[torch.Tensor, "count seq_plus_one"]:
+    """Random windows of story text from the config's sources (random tokens in smoke)."""
+    width = config.seq_len + 1
+    rng = np.random.default_rng(seed)
+    if smoke:
+        tokens_by_source = [rng.integers(16, config.vocab_size, 64 * width)]
+    else:
+        tokens_by_source = load_tokens(config.sources, split, memory_map=True)
+    sizes = np.array([len(tokens) for tokens in tokens_by_source])
+    source_shares = sizes / sizes.sum()  # draw sources in proportion to their size
+    windows = []
+    for _ in range(count):
+        tokens = tokens_by_source[rng.choice(len(tokens_by_source), p=source_shares)]
+        start = rng.integers(len(tokens) - width)
+        windows.append(tokens[start : start + width].astype(np.int64))
+    return torch.tensor(np.stack(windows), device=device)  # (count, seq + 1)
 
 
 def draw_source_ids(
